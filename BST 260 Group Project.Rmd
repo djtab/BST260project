@@ -1,0 +1,128 @@
+---
+title: "BST 260 Group Project"
+author: "Christina, Dena, Jack, Veronica, Whitney"
+date: "11/22/2021"
+output: html_document
+---
+
+```{r}
+#some basic packages that we will probably want: 
+library(tidyverse)
+library(lubridate)
+library(rvest)
+
+#package to read in xlsx files from a url:
+library(openxlsx)
+```
+
+Analysis 1: Data scraping, cleaning and merging
+
+Obtain County Health Ranking Data sheets, as well as county-level COVID data from NYT:
+
+```{r}
+#County Health Ranking Data:
+dat <- read.xlsx("https://www.countyhealthrankings.org/sites/default/files/media/document/2021%20County%20Health%20Rankings%20Data%20-%20v1.xlsx", sheet = 4, startRow = 2)
+
+#County Health Ranking Data second sheet:
+dat2 <- read.xlsx("https://www.countyhealthrankings.org/sites/default/files/media/document/2021%20County%20Health%20Rankings%20Data%20-%20v1.xlsx", sheet = 6, startRow = 2)
+
+#Cumulative County-level COVID data:
+covid_dat <- read.csv(url("https://raw.githubusercontent.com/nytimes/covid-19-data/master/us-counties.csv"))
+```
+
+Web scraping for County names and population from Wikipedia:
+
+```{r}
+
+url <- "https://en.wikipedia.org/wiki/List_of_United_States_counties_and_county_equivalents"
+tab = read_html(url) %>% html_nodes("table")
+
+county_names <- c("county", "state", "population_2019", "delete")
+counties <- tab %>% .[1] %>% html_table %>% .[[1]] %>% setNames(county_names)
+
+counties <- counties %>% 
+  select(!delete)
+
+#make population_2019 numeric:
+counties$population_2019 <- as.numeric(gsub(",","", counties$population_2019))
+
+```
+
+Data Manipulation and Merging:
+
+```{r}
+#Filter COVID data to most recent date, then arrange by state:
+covid_dat <- covid_dat %>%
+  filter(date == '2021-11-21') %>%
+  select(!fips) %>%
+  arrange(state)
+
+#Make a list of the column names that we're interested in for dat:
+columns <- c("FIPS",	"State",	"County", "Years.of.Potential.Life.Lost.Rate", "%.Fair.or.Poor.Health", "Average.Number.of.Physically.Unhealthy.Days",	"Average.Number.of.Mentally.Unhealthy.Days",	"%.Low.birthweight",	"%.Smokers", "%.Adults.with.Obesity",	"Food.Environment.Index",	"%.Physically.Inactive",	"%.With.Access.to.Exercise.Opportunities",	"%.Excessive.Drinking",	"#.Alcohol-Impaired.Driving.Deaths",	"#.Driving.Deaths",	"%.Driving.Deaths.with.Alcohol.Involvement",	"Chlamydia.Rate",	"Teen.Birth.Rate",	"%.Uninsured", "Primary.Care.Physicians.Rate",	"Primary.Care.Physicians.Ratio",	"Dentist.Rate",	"Dentist.Ratio",	"Mental.Health.Provider.Rate",	"Mental.Health.Provider.Ratio",	"Preventable.Hospitalization.Rate",	"%.With.Annual.Mammogram",	"%.Vaccinated",	"%.Completed.High.School",	"%.Some.College",	"%.Unemployed",	"%.Children.in.Poverty",	"Income.Ratio",	"%.Children.in.Single-Parent.Households",	"Social.Association.Rate", "Violent.Crime.Rate",	"Injury.Death.Rate",	"Average.Daily.PM2.5",	"Presence.of.Water.Violation", "%.Severe.Housing.Problems",	"%.Drive.Alone.to.Work", "%.Long.Commute.-.Drives.Alone")
+
+#Keep only the columns from our list above, rename to match COVID data, arrange by state:
+dat <- dat %>%
+  select(columns) %>%
+  rename(county = County) %>%
+  rename(state = State) %>%
+  rename(fips = FIPS) %>%
+  arrange(state)
+
+#Make a list of the column names we're interested in for dat2:
+columns2 <- c("FIPS",	"State",	"County", "Life.Expectancy",	"Age-Adjusted.Death.Rate",	"Child.Mortality.Rate",	"Infant.Mortality.Rate",	"%.Frequent.Physical.Distress",	"%.Frequent.Mental.Distress",	"%.Adults.with.Diabetes",	"HIV.Prevalence.Rate",	"%.Food.Insecure",	"%.Limited.Access.to.Healthy.Foods",	"Drug.Overdose.Mortality.Rate",	"Motor.Vehicle.Mortality.Rate",	"%.Insufficient.Sleep",	"%.Disconnected.Youth",	"Average.Grade.Performance",	"Median.Household.Income",	"%.Enrolled.in.Free.or.Reduced.Lunch",	"Homicide.Rate",	"Suicide.Rate.(Age-Adjusted)",	"Firearm.Fatalities.Rate",	"Juvenile.Arrest.Rate",	"%.Homeowners",	"%.Broadband.Access",	"%.Female",	"%.Rural")
+
+#Keep only the columns from our list above, rename to match COVID data, arrange by state:
+dat2 <- dat2 %>%
+  select(columns2) %>%
+  rename(county = County) %>%
+  rename(state = State) %>%
+  rename(fips = FIPS) %>%
+  arrange(state)
+
+#Merge dat with dat2, then merge with COVID data:
+dat <- dat %>%
+  inner_join(dat2, by=c("fips", "county", "state"))
+
+dat <- dat %>%
+  inner_join(covid_dat, by=c("county", "state"))
+
+#Finally, merge dat with counties for population:
+dat <- dat %>%
+  inner_join(counties, by=c("county", "state"))
+
+```
+
+Analysis 2:
+
+```{r}
+
+
+```
+
+Analysis 3:
+
+```{r}
+
+
+```
+
+Analysis 4:
+
+```{r}
+
+
+```
+
+Analysis 5:
+
+```{r}
+
+
+```
+
+Analysis 6:
+
+```{r}
+
+
+```

@@ -95,20 +95,64 @@ dat <- dat %>%
 Analysis 2:
 
 ```{r}
+##box plot of household income per state 
+p <- dat %>% 
+  mutate(state = reorder(state, Median.Household.Income, FUN = median)) %>%
+  ggplot(aes(state, Median.Household.Income, fill = state)) +
+  geom_boxplot() + 
+  theme_bw() +
+  ggtitle("Boxplots of Median Household Income by State")  +
+  theme_update(plot.title = element_text(hjust = 1)) + 
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+  xlab("State") + ylab("Median Household Income")+
+  theme(legend.position = "none")
+p 
 
+##Next steps: change backgorund, axis, color scheme of box plots 
 
 ```
 
 Analysis 3:
 
 ```{r}
-#test push from Jack
+#box plot of life expectancy by state
+p2 <- dat %>% 
+  ggplot(aes(x = reorder(state, Life.Expectancy), y = Life.Expectancy, fill = state)) +
+  geom_boxplot() + 
+  theme_bw() +
+  theme(legend.position = "none") + 
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+  theme(plot.title = element_text(hjust = 0.5)) + 
+  ggtitle("Boxplots of Life Expectancy Per State") + 
+  xlab("State") + ylab("Life Expectancy (years)")
+
+p2
+
+##Next steps: change background, axis, color scheme of box plots 
 
 ```
 
 Analysis 4:
 
 ```{r}
+dat %>% select(county, state, Life.Expectancy) %>% arrange(Life.Expectancy)
+
+p5 <- dat %>% select(county, state, Life.Expectancy) %>% arrange(Life.Expectancy)%>% 
+          filter(Life.Expectancy <= 70.14277)
+
+#creating a line plot of descending order of life expectancy
+p6 <- p5 %>% ggplot(aes(x = reorder(county, -Life.Expectancy), y = Life.Expectancy, group = 1)) +
+            geom_point() +
+            geom_line() + 
+            theme_bw() + 
+            ggtitle("Top 25 Counties With the Shortest Life Expectancy in the United States") +
+            theme(plot.title = element_text(hjust = 0.5)) + 
+            theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+            xlab("U.S County") + ylab("Life Expectancy (years)") 
+
+p6 + scale_x_discrete("Cut Type", labels = c("Oglala Lakota" = "Oglala Lakota (SD)", "Buffalo" = " Buffalo (SD)", "Corson" = "Corson (SD)", "Mellette" = " Mellette (SD)","Todd" = " Todd (SD)", "Roosevelt" = "Roosevelt (MT)", "Dewey" = "Dewey (SD)", 
+                                             "Big Horn" = "Big Horn (MT)", "Union" = "Union (FL)", "Sioux" = "Sioux (ND)", "Perry" = "Perry (KY)",  "Kingman" = "Kingman (KS)", "McDowell" = "McDowell (WV)", "Edwards" = "Edwards (KS)", "Bennett" = "Bennett (SD)", "Owsley" = "Owsley (KY)", "Thurston" = "Thurston (NE)", "Breathitt" = "Breathitt (KY)", "Okfuskee" = "Okfuskee (OK)", "Logan" = "Logan (WV)", "Monroe" = "Monroe (AL)", "Powell" = "Powell (KY)", "Tunica" = "Tunica (MS)", "Sharkey" = "Sharkey	(MS)", "Mahnomen" = "Mahnomen (MN)"))
+
 
 
 ```
@@ -117,12 +161,62 @@ Analysis 5:
 
 ```{r}
 
+head(dat$Life.Expectancy)
+class(dat$Life.Expectancy)
+mean(dat$Life.Expectancy, na.rm = TRUE)
+##histogram of life expectancy in the united states
+p7 <- dat %>% ggplot(aes(x = Life.Expectancy)) +
+              geom_histogram(binwidth = 0.2, color = "black", fill = "light blue") + 
+              theme_bw()+ 
+              ggtitle("Histogram of Life Expectancy in the United States") +
+              theme(plot.title = element_text(hjust = 0.5)) +
+              xlab("Life Expectancy") 
+
+p7 + geom_vline(aes(xintercept = mean(Life.Expectancy, na.rm = TRUE)), col='dark red',size=1)
+
 
 ```
 
 Analysis 6:
 
 ```{r}
-
+#####Drug Overdose Mortality
+p8 <- dat %>% ggplot(aes(x = `Drug.Overdose.Mortality.Rate`)) +
+              geom_histogram(binwidth = 0.75, color = "black", fill = "gray") + 
+              theme_bw()+ 
+              ggtitle("Histogram of Drug Overdose Mortality Rate per 100,000 population in the U.S.") +
+              theme(plot.title = element_text(hjust = 0.5)) +
+              xlab("Drug Overdose Mortality Rate (per 100,000 population)") 
+p8 + geom_vline(aes(xintercept = median(`Drug.Overdose.Mortality.Rate`, na.rm = TRUE)), col='dark red',size=1) 
 
 ```
+
+```{r}
+p9 <- dat %>% 
+  ggplot(aes(x = reorder(state, Drug.Overdose.Mortality.Rate) , y = Drug.Overdose.Mortality.Rate, fill = state)) +
+  geom_boxplot() + 
+  theme_bw() +
+  ggtitle("Boxplots of Drug Overdose Mortality Rate by State")  +
+  theme_update(plot.title = element_text(hjust = 0.5)) + 
+  theme(axis.text.x = element_text(angle = 90, hjust = 0.5)) +
+  xlab("State") + ylab("Drug Overdose Mortality Rate per 100,000 Population")+ #change size of text
+  theme(legend.position = "none")
+
+p9 
+
+```
+
+```{r}
+###Scatter plot of drug over dose mortality and life expectancy 
+p10 <- dat %>% ggplot(aes(x = Drug.Overdose.Mortality.Rate, y = Life.Expectancy)) +
+            geom_point(size = 1) 
+    
+p10
+
+##adding a trend line
+#color code by region
+```
+
+
+
+

@@ -213,7 +213,7 @@ p10 <- dat %>% ggplot(aes(x = Drug.Overdose.Mortality.Rate, y = Life.Expectancy)
     
 p10
 
-##adding a trend line
+##adding a trend line to show relationship between drug over dose mortality and life expectancy
 #color code by region
 ```
 

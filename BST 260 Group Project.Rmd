@@ -102,7 +102,7 @@ p <- dat %>%
   geom_boxplot() + 
   theme_bw() +
   ggtitle("Boxplots of Median Household Income by State")  +
-  theme_update(plot.title = element_text(hjust = 1)) + 
+  theme_update(plot.title = element_text(hjust = 0.75)) + 
   theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
   xlab("State") + ylab("Median Household Income")+
   theme(legend.position = "none")
@@ -117,6 +117,7 @@ Analysis 3:
 ```{r}
 #box plot of life expectancy by state
 p2 <- dat %>% 
+  mutate(state = reorder(state, Life.Expectancy, FUN = median)) %>%
   ggplot(aes(x = reorder(state, Life.Expectancy), y = Life.Expectancy, fill = state)) +
   geom_boxplot() + 
   theme_bw() +
@@ -128,7 +129,6 @@ p2 <- dat %>%
 
 p2
 
-##Next steps: change background, axis, color scheme of box plots 
 
 ```
 
@@ -137,11 +137,12 @@ Analysis 4:
 ```{r}
 dat %>% select(county, state, Life.Expectancy) %>% arrange(Life.Expectancy)
 
-p5 <- dat %>% select(county, state, Life.Expectancy) %>% arrange(Life.Expectancy)%>% 
+p3 <- dat %>% select(county, state, Life.Expectancy) %>% arrange(Life.Expectancy)%>% 
           filter(Life.Expectancy <= 70.14277)
+p3
 
 #creating a line plot of descending order of life expectancy
-p6 <- p5 %>% ggplot(aes(x = reorder(county, -Life.Expectancy), y = Life.Expectancy, group = 1)) +
+p4 <- p3 %>% ggplot(aes(x = reorder(county, -Life.Expectancy), y = Life.Expectancy, group = 1)) +
             geom_point() +
             geom_line() + 
             theme_bw() + 
@@ -150,7 +151,7 @@ p6 <- p5 %>% ggplot(aes(x = reorder(county, -Life.Expectancy), y = Life.Expectan
             theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
             xlab("U.S County") + ylab("Life Expectancy (years)") 
 
-p6 + scale_x_discrete("Cut Type", labels = c("Oglala Lakota" = "Oglala Lakota (SD)", "Buffalo" = " Buffalo (SD)", "Corson" = "Corson (SD)", "Mellette" = " Mellette (SD)","Todd" = " Todd (SD)", "Roosevelt" = "Roosevelt (MT)", "Dewey" = "Dewey (SD)", 
+p4 + scale_x_discrete("U.S. County", labels = c("Oglala Lakota" = "Oglala Lakota (SD)", "Buffalo" = " Buffalo (SD)", "Corson" = "Corson (SD)", "Mellette" = " Mellette (SD)","Todd" = " Todd (SD)", "Roosevelt" = "Roosevelt (MT)", "Dewey" = "Dewey (SD)", 
                                              "Big Horn" = "Big Horn (MT)", "Union" = "Union (FL)", "Sioux" = "Sioux (ND)", "Perry" = "Perry (KY)",  "Kingman" = "Kingman (KS)", "McDowell" = "McDowell (WV)", "Edwards" = "Edwards (KS)", "Bennett" = "Bennett (SD)", "Owsley" = "Owsley (KY)", "Thurston" = "Thurston (NE)", "Breathitt" = "Breathitt (KY)", "Okfuskee" = "Okfuskee (OK)", "Logan" = "Logan (WV)", "Monroe" = "Monroe (AL)", "Powell" = "Powell (KY)", "Tunica" = "Tunica (MS)", "Sharkey" = "Sharkey	(MS)", "Mahnomen" = "Mahnomen (MN)"))
 
 
@@ -165,14 +166,14 @@ head(dat$Life.Expectancy)
 class(dat$Life.Expectancy)
 mean(dat$Life.Expectancy, na.rm = TRUE)
 ##histogram of life expectancy in the united states
-p7 <- dat %>% ggplot(aes(x = Life.Expectancy)) +
+p5 <- dat %>% ggplot(aes(x = Life.Expectancy)) +
               geom_histogram(binwidth = 0.2, color = "black", fill = "light blue") + 
               theme_bw()+ 
               ggtitle("Histogram of Life Expectancy in the United States") +
               theme(plot.title = element_text(hjust = 0.5)) +
               xlab("Life Expectancy") 
 
-p7 + geom_vline(aes(xintercept = mean(Life.Expectancy, na.rm = TRUE)), col='dark red',size=1)
+p5 + geom_vline(aes(xintercept = mean(Life.Expectancy, na.rm = TRUE)), col='dark red',size=1)
 
 
 ```
@@ -181,42 +182,117 @@ Analysis 6:
 
 ```{r}
 #####Drug Overdose Mortality
-p8 <- dat %>% ggplot(aes(x = `Drug.Overdose.Mortality.Rate`)) +
+p6 <- dat %>% ggplot(aes(x = `Drug.Overdose.Mortality.Rate`)) +
               geom_histogram(binwidth = 0.75, color = "black", fill = "gray") + 
               theme_bw()+ 
               ggtitle("Histogram of Drug Overdose Mortality Rate per 100,000 population in the U.S.") +
               theme(plot.title = element_text(hjust = 0.5)) +
               xlab("Drug Overdose Mortality Rate (per 100,000 population)") 
-p8 + geom_vline(aes(xintercept = median(`Drug.Overdose.Mortality.Rate`, na.rm = TRUE)), col='dark red',size=1) 
+p6 + geom_vline(aes(xintercept = median(`Drug.Overdose.Mortality.Rate`, na.rm = TRUE)), col='dark red',size=1) 
 
 ```
 
 ```{r}
-p9 <- dat %>% 
-  ggplot(aes(x = reorder(state, Drug.Overdose.Mortality.Rate) , y = Drug.Overdose.Mortality.Rate, fill = state)) +
+p7 <- dat %>% 
+  ggplot(aes(x = reorder(state, Drug.Overdose.Mortality.Rate) , y = Drug.Overdose.Mortality.Rate, fill = state))+
   geom_boxplot() + 
   theme_bw() +
   ggtitle("Boxplots of Drug Overdose Mortality Rate by State")  +
   theme_update(plot.title = element_text(hjust = 0.5)) + 
   theme(axis.text.x = element_text(angle = 90, hjust = 0.5)) +
+  theme(axis.text.y = element_text(size = 2)) + ##need to adjust the size of text 
   xlab("State") + ylab("Drug Overdose Mortality Rate per 100,000 Population")+ #change size of text
   theme(legend.position = "none")
 
-p9 
+p7 
+
+```
+
+```{r}
+dat %>% select(county, state, Drug.Overdose.Mortality.Rate) %>% arrange(desc(Drug.Overdose.Mortality.Rate))
+
+p8 <- dat %>% select(county, state, Drug.Overdose.Mortality.Rate) %>% arrange(Drug.Overdose.Mortality.Rate)%>% 
+          filter(Drug.Overdose.Mortality.Rate >= 61.50097)
+
+#creating a line plot of descending order of life expectancy
+p9 <- p8 %>% ggplot(aes(x = reorder(county, Drug.Overdose.Mortality.Rate), y = Drug.Overdose.Mortality.Rate, group = 1)) +
+            geom_point() +
+            geom_line() + 
+            theme_bw() + 
+            ggtitle("Top 25 Counties With the Highest Drug Overdose Mortality Ratio in the United States") +
+            theme(plot.title = element_text(hjust = 0.5)) + 
+            theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+            xlab("U.S County") + ylab("Drug Overdose Mortality Ratio (per 100,000 population)") 
+
+p9 + scale_x_discrete("U.S. County", labels = c("Kenton" = "Kenton (KY)", "Lake" = " Lake (CA)", "Cheatham" = "Cheatham (TN)", "Hampshire" = " Hampshire (WV)", "Owen" = "Owen (KY)", "Gallia" = "Gallia (OH)", "Lincoln" = "Lincoln (WV)", "Boyd" = "Boyd (KY)", "Union" = "Union (IN)", "Estill" = "Estill (KY)", "Fayette" = "Fayette (WV) & (IN)", "Mahnomen" = "Mahnomen (MN)", "Cecil" = "Cecil (MD)", "Montgomery" = "Montgomery (OH)", "Kanawha" = "Kanawha (WV)", "Gallatin" = "Gallatin (KY)", "Boone" = "Boone (WV)", "Rio Arriba" = "Rio Arriba (NM)", "Raleigh" = "Raleigh (WV)", "Wayne" = "Wayne	(IN)", "Scioto" = "Scioto (OH)", "Logan" = "Logan (WV)", "Wayne" = "Wayne (WV)", "Cabell" = "Cabell (WV)"))
+
 
 ```
 
 ```{r}
 ###Scatter plot of drug over dose mortality and life expectancy 
 p10 <- dat %>% ggplot(aes(x = Drug.Overdose.Mortality.Rate, y = Life.Expectancy)) +
-            geom_point(size = 1) 
+            geom_point(size = 1) + 
+            ggtitle("Scatter Plot of Life Expectancy vs. Drug Overdose Mortality Rate (per 100,000 population)") +
+            theme(plot.title = element_text(size = 10)) + 
+            xlab("Drug Overdose Mortality Rate (per 100,000 population)") + 
+            ylab("Life Expectancy (years)") 
     
-p10
+p10 + geom_smooth(method = "lm")
 
-##adding a trend line to show relationship between drug over dose mortality and life expectancy
-#color code by region
+#adding a trend line
+
+
 ```
 
+```{r}
+####Food Insecurity
+dat %>% select(county, state, `%.Food.Insecure`) %>% arrange(desc(`%.Food.Insecure`))
 
+p11 <- dat %>% select(county, state, `%.Food.Insecure`) %>% arrange(`%.Food.Insecure`)%>% 
+          filter(`%.Food.Insecure` >= 23.9)
+
+p11
+
+#creating a line plot of descending order of life expectancy
+p12 <- p11 %>% ggplot(aes(x = reorder(county, `%.Food.Insecure`), y = `%.Food.Insecure`, group = 1)) +
+            geom_point() +
+            geom_line() + 
+            theme_bw() + 
+            ggtitle("Top 25 Counties With the Highest Food Insecurity % in the United States") +
+            theme(plot.title = element_text(hjust = 0.5)) + 
+            theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+            xlab("U.S County") + ylab("Food Insecurity %") 
+
+p12 + scale_x_discrete("U.S. County", labels = c("Chicot" = "Chicot (AR)", "Coahoma" = "Coahoma (MS)", "Bolivar" = "Bolivar (MS)", "Clay" = " Clay (GA) & Clay (KY)", "Leflore" = "Leflore (MS)", "Wolfe" = "Wolfe (KY)", "Washington" = "Washington (MS)", "Breathitt" = "Breathitt (KY)", "Wilcox" = "Wilcox (AL)", "Bell" = "Bell (KY)", "Magoffin" = "Magoffin (KY)", "Harlan" = "Harlan (KY)", "Wilkinson" = "Wilkinson (MS)", "Quitman" = "Quitman (MS)", "Phillips" = "Phillips (AR)", "Todd" = "Todd (SD)", "Greene" = "Greene (AL)", "Humphreys" = "Humphreys (MS)", "Oglala Lakota" = "Oglala Lakota (SD)", "Perry" = "Perry (AL)", "Claiborne" = "Claiborne (MS)", "Holmes" = "Holmes (MS)", "Issaquena" = "Issaquena (MS)", "Jefferson" = "Mississippi (MS)"))
+
+
+
+
+```
+```{r}
+####%Housing Problems 
+dat %>% select(county, state, `%.Severe.Housing.Problems`) %>% arrange(desc(`%.Severe.Housing.Problems`))
+
+p13 <- dat %>% select(county, state, `%.Severe.Housing.Problems`) %>% arrange(`%.Severe.Housing.Problems`)%>% 
+          filter(`%.Severe.Housing.Problems` >= 26.43805)
+
+p13
+
+#creating a line plot of descending order of life expectancy
+p14 <- p13 %>% ggplot(aes(x = reorder(county, `%.Severe.Housing.Problems`), y = `%.Severe.Housing.Problems`, group = 1)) +
+            geom_point() +
+            geom_line() + 
+            theme_bw() + 
+            ggtitle("Top 25 Counties With the Highest Severe Housing Problems % in the United States") +
+            theme(plot.title = element_text(hjust = 0.5)) + 
+            theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+            xlab("U.S County") + ylab("Food Insecurity %") 
+
+p14 + scale_x_discrete("U.S. County", labels = c("Imperial" = "Imperial (CA)", "Mendocino" = "Mendocino (CA)", "Tunica" = "Tunica (MS)", "Rockland" = " Rockland (NY)", "Orange" = "California (CA)", "Ziebach" = "Ziebach (SD)", "Fresno" = "Fresno (CA)", "Tulare" = "Tulare (CA)", "Santa Cruz" = "Santa Cruz (CA)", "Todd" = "Todd (SD)", "Essex" = "Essex (NJ)", "Alpine" = "Alpine (CA)", "Hudson" = "Hudson (NJ)", "San Miguel" = "San Miguel (CO)", "McKinley" = "McKinley (NM)", "Webb" = "Webb (TX)", "Santa Barbara" = "Santa Barbara (CA)", "Buffalo" = "Buffalo (SD)", "Monterey" = "Monterey (CA)", "Miami-Dade" = "Miami-Dade (FL)", "Passaic" = "Passaic (NJ)", "Apache" = "Apache (AZ)", "Madison" = "Madison (ID)", "Los Angeles" = "Los Angeles (CA)", "Oglala Lakota" = "Oglala Lakota	(SD)"))
+
+
+
+```
 
 

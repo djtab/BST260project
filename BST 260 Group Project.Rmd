@@ -2,7 +2,9 @@
 title: "BST 260 Group Project"
 author: "Christina, Dena, Jack, Veronica, Whitney"
 date: "11/22/2021"
-output: html_document
+output:
+  pdf_document: default
+  html_document: default
 ---
 
 ```{r}

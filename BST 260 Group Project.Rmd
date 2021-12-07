@@ -432,3 +432,136 @@ od_le_bivariate <- ggdraw() +
 od_le_bivariate
 ```
 
+
+```{r}
+
+# prediction model
+
+# The built environment and place-based policies play important roles in life expectancy. They are also important factors in many of the epidemics facing America, including drug-related overdose mortality. It would be helpful to know what factors related to county-level characteristics help to predict differences in life expectancies and drug-related overdose mortality. 
+
+# We will be using data from the county health rankings to explore predictors for life expectancy using the following variables:
+
+# Fair or Poor Health
+# Average number of physically unhealthy days
+# Average number of mentally unhealthy days
+# low birthweight
+# smoking status
+# adults with obesity
+# food environment index
+# mental health provider rate 
+# percent completed high school
+# percent completed college
+# percent unemployed
+# violent crime rate 
+# average daily PM 2.5
+# Severe housing problems
+# Median Household Income
+
+pred_dat <- dat %>% select(Life.Expectancy, `%.Fair.or.Poor.Health`, `Average.Number.of.Physically.Unhealthy.Days`,	`Average.Number.of.Mentally.Unhealthy.Days`,	`%.Low.birthweight`,	`%.Smokers`, `%.Adults.with.Obesity`,	`%.Food.Insecure`,	`%.Physically.Inactive`,	`%.Excessive.Drinking`,	`%.Uninsured`, `Primary.Care.Physicians.Rate`,	Mental.Health.Provider.Rate,	`%.Completed.High.School`, `%.Some.College`,	`%.Unemployed`,	Median.Household.Income, Violent.Crime.Rate, Average.Daily.PM2.5, `%.Severe.Housing.Problems`) %>% arrange(Life.Expectancy) %>% drop_na()
+
+library(GGally)
+library(ggplot2)
+corr <- cor(pred_dat)
+ggcorr(corr, 
+       label = T, 
+       label_size = 2,
+       label_round = 2,
+       hjust = 1,
+       size = 3, 
+       color = "royalblue",
+       layout.exp = 5,
+       low = "red", 
+       mid = "white", 
+       high = "blue",
+       name = "Correlation")
+
+# We will be using data from the county health rankings to explore predictors for the drug-related overdose mortality outcomes using the following variables:
+
+# Food Security = Food.Insecure 
+# Youth activities = Disconnected.Youth 
+# Home ownership = %.Homeowners
+# Gender = %.female
+# Urbanicity = %.rural
+# socioeconomic status = Median.Household.Income
+
+pred_dat2 <- dat %>% select(Drug.Overdose.Mortality.Rate,`%.Frequent.Physical.Distress`, `%.Frequent.Mental.Distress`,	`%.Smokers`, `%.Food.Insecure`,	`%.Physically.Inactive`,	`%.Excessive.Drinking`,	`%.Uninsured`, `Primary.Care.Physicians.Rate`,	Mental.Health.Provider.Rate,	`%.Completed.High.School`, `%.Some.College`,	`%.Unemployed`,	Median.Household.Income, Violent.Crime.Rate, `%.Insufficient.Sleep`, `%.Severe.Housing.Problems`, Life.Expectancy) %>% arrange(Drug.Overdose.Mortality.Rate) %>% drop_na()
+
+corr2 <- cor(pred_dat2)
+ggcorr(corr2, 
+       label = T, 
+       label_size = 2,
+       label_round = 2,
+       hjust = 1,
+       size = 3, 
+       color = "royalblue",
+       layout.exp = 5,
+       low = "red", 
+       mid = "white", 
+       high = "blue",
+       name = "Correlation")
+
+
+pred_fit <- glm(Life.Expectancy ~ ., data=pred_dat)
+summary(pred_fit)
+
+pred_fit2 <- glm(Drug.Overdose.Mortality.Rate ~ ., data=pred_dat2)
+summary(pred_fit2)
+avg.overdose <- mean(pred_dat2$Drug.Overdose.Mortality.Rate)
+avg.overdose
+avg.life <- mean(pred_dat$Life.Expectancy)
+avg.life
+
+pred_dat <- pred_dat %>% mutate(life_exp = ifelse(Life.Expectancy >= avg.life, 0, 1))
+
+pred_dat2 <- pred_dat2 %>% mutate(overdose = ifelse(Drug.Overdose.Mortality.Rate >= avg.overdose, 1, 0))
+
+library(tidyverse)
+library(splitstackshape)
+library(caret)
+library(e1071)
+library(pROC)
+library(dplyr)
+library(ggplot2)
+remotes::update_packages("rlang")
+
+
+set.seed(1)
+
+x <- stratified(pred_dat, "life_exp", 0.7, keep.rownames = TRUE)
+train_set <- x %>% dplyr::select(-rn)
+train_index <- as.numeric(x$rn)
+test_set <- pred_dat[-train_index,]
+
+dim(train_set)
+dim(test_set)
+
+## Logistic regression
+fit <-  glm(life_exp ~ `%.Food.Insecure` +	`%.Uninsured` + `%.Some.College` +	`%.Unemployed` +	Median.Household.Income + Violent.Crime.Rate + Average.Daily.PM2.5 + `%.Severe.Housing.Problems`, data= train_set, family="binomial")
+
+p_hat <- predict(fit, newdata = test_set, type="response")
+y_hat <- ifelse(p_hat > 0.5, 1, 0)
+CF <- confusionMatrix(data = as.factor(y_hat), reference = as.factor(test_set$life_exp), positive = '1')
+CF
+
+## Naive Bayes
+set.seed(1)
+nb_fit <-  naiveBayes(life_exp ~ `%.Food.Insecure` +	`%.Uninsured` + `%.Some.College` +	`%.Unemployed` +	Median.Household.Income + Violent.Crime.Rate + Average.Daily.PM2.5 + `%.Severe.Housing.Problems`, data = train_set)
+
+p_hat_nb <- predict(nb_fit, test_set, type = "raw")[,2]
+y_hat_nb <- factor(ifelse(p_hat_nb > 0.5, 1, 0))
+CFnb <- confusionMatrix(data = as.factor(y_hat_nb), reference = as.factor(test_set$life_exp), positive = '1')
+CFnb
+
+## decision tree
+library(rpart)
+set.seed(1)
+train_set <- train_set  %>% dplyr::select(., life_exp, `%.Food.Insecure` ,	`%.Uninsured` , `%.Some.College` ,	`%.Unemployed`,	Median.Household.Income , Violent.Crime.Rate , Average.Daily.PM2.5 , `%.Severe.Housing.Problems`)
+tree_fit <- rpart(as.factor(life_exp) ~ ., data = train_set)
+tree_preds <- predict(tree_fit, newdata = test_set, type = "class")
+
+# confusion matrix
+CFtree <- confusionMatrix(data = as.factor(tree_preds), reference = as.factor(test_set$life_exp), positive='1')
+CFtree
+
+```
+

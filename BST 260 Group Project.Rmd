@@ -324,9 +324,9 @@ county_sf <- as(county_shp, "sf")
 
 county_sf <- county_sf %>% mutate(fips = paste(STATEFP, COUNTYFP, sep = ""))
 
-dat_subset <- select(dat2, c(FIPS, Drug.Overdose.Mortality.Rate, Life.Expectancy))
+dat_subset <- dplyr::select(dat2, c(fips, Drug.Overdose.Mortality.Rate, Life.Expectancy))
 
-county_sf <- left_join(county_sf, dat_subset, by = c("fips" = "FIPS"))
+county_sf <- left_join(county_sf, dat_subset, by = c("fips" = "fips"))
 
 county_sf <- county_sf %>% filter(STATEFP != "14" & STATEFP != "03" & STATEFP != "43" & STATEFP != "52" & STATEFP != "78" & STATEFP != "79" & STATEFP != "74" & STATEFP != "72" & STATEFP != "69" & STATEFP != "70" & STATEFP != "95" & STATEFP != "71" & STATEFP != "76" & STATEFP != "68" & STATEFP != "89" & STATEFP != "67" & STATEFP != "86" & STATEFP != "84" & STATEFP != "66" & STATEFP != "64" & STATEFP != "81" & STATEFP != "60" & COUNTYFP != "016")
 

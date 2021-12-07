@@ -303,3 +303,130 @@ p14 + scale_x_discrete("U.S. County", labels = c("Imperial" = "Imperial (CA)", "
 ```
 
 
+```{r, warning=FALSE}
+# Map of life expectancy by drug overdose deaths
+library(biscale)
+library(rgdal)
+library(ggplot2)
+library(sf)
+library(sp)
+library(tibble)
+library(cowplot)
+library(ggsn)
+library(rgeos)
+library(raster)
+library(staplr)
+
+county_shp <- rgdal::readOGR(".", layer = "cb_2018_us_county_20m",
+                            verbose = F)
+
+county_sf <- as(county_shp, "sf")
+
+county_sf <- county_sf %>% mutate(fips = paste(STATEFP, COUNTYFP, sep = ""))
+
+dat_subset <- select(dat2, c(FIPS, Drug.Overdose.Mortality.Rate, Life.Expectancy))
+
+county_sf <- left_join(county_sf, dat_subset, by = c("fips" = "FIPS"))
+
+county_sf <- county_sf %>% filter(STATEFP != "14" & STATEFP != "03" & STATEFP != "43" & STATEFP != "52" & STATEFP != "78" & STATEFP != "79" & STATEFP != "74" & STATEFP != "72" & STATEFP != "69" & STATEFP != "70" & STATEFP != "95" & STATEFP != "71" & STATEFP != "76" & STATEFP != "68" & STATEFP != "89" & STATEFP != "67" & STATEFP != "86" & STATEFP != "84" & STATEFP != "66" & STATEFP != "64" & STATEFP != "81" & STATEFP != "60" & COUNTYFP != "016")
+
+county_sf_no_od_na <- county_sf %>% filter(is.na(Drug.Overdose.Mortality.Rate) == FALSE)
+```
+
+
+```{r}
+od_le_class <- bi_class(county_sf_no_od_na, x = Drug.Overdose.Mortality.Rate, y = Life.Expectancy, style = "quantile", dim = 3)
+
+map_county <- ggplot() + 
+  geom_sf(data = filter(county_sf, STATEFP != "15" & STATEFP != "02"), fill = NA, color = "black", size = 0.3, show.legend = FALSE) + 
+  theme(axis.text.x = element_blank(),
+        axis.text.y = element_blank(), 
+        axis.ticks.x = element_blank(),
+        axis.ticks.y = element_blank(), 
+        axis.title = element_blank(),
+        panel.grid.major = element_blank(), 
+        panel.grid.minor = element_blank(),
+        panel.background = element_rect(fill = "transparent",colour = NA),
+        plot.background = element_rect(fill = "transparent",colour = NA))
+
+map_county_hi <- ggplot() + 
+  geom_sf(data = filter(county_sf, STATEFP == "15"), fill = NA, color = "black", size = 0.3, show.legend = FALSE) + 
+  theme(axis.text.x = element_blank(),
+        axis.text.y = element_blank(), 
+        axis.ticks.x = element_blank(),
+        axis.ticks.y = element_blank(), 
+        axis.title = element_blank(),
+        panel.grid.major = element_blank(), 
+        panel.grid.minor = element_blank(),
+        panel.background = element_rect(fill = "transparent",colour = NA),
+        plot.background = element_rect(fill = "transparent",colour = NA))
+
+map_county_ak <- ggplot() + 
+  geom_sf(data = filter(county_sf, STATEFP == "02"), fill = NA, color = "black", size = 0.3, show.legend = FALSE) + 
+  theme(axis.text.x = element_blank(),
+        axis.text.y = element_blank(), 
+        axis.ticks.x = element_blank(),
+        axis.ticks.y = element_blank(), 
+        axis.title = element_blank(),
+        panel.grid.major = element_blank(), 
+        panel.grid.minor = element_blank(),
+        panel.background = element_rect(fill = "transparent",colour = NA),
+        plot.background = element_rect(fill = "transparent",colour = NA))
+
+map_od_le <- ggplot() +
+  geom_sf(data = filter(od_le_class, STATEFP != "15" & STATEFP != "02"), mapping = aes(fill = bi_class),
+          color = "white", size = 0.1, show.legend = FALSE) +
+  bi_scale_fill(pal = "DkBlue", dim = 3) +
+  bi_theme() +
+  north(od_le_class, scale = 0.12) +
+  theme(axis.text.x = element_blank(),
+        axis.text.y = element_blank(), 
+        axis.ticks.x = element_blank(),
+        axis.ticks.y = element_blank(), 
+        axis.title = element_blank(),
+        rect = element_blank())
+
+map_od_le_hi <- ggplot() +
+  geom_sf(data = filter(od_le_class, STATEFP == "15"), mapping = aes(fill = bi_class),
+          color = "white", size = 0.1, show.legend = FALSE) +
+  bi_scale_fill(pal = "DkBlue", dim = 3) +
+  bi_theme() +
+  north(od_le_class, scale = 0.12) +
+  theme(axis.text.x = element_blank(),
+        axis.text.y = element_blank(), 
+        axis.ticks.x = element_blank(),
+        axis.ticks.y = element_blank(), 
+        axis.title = element_blank(),
+        rect = element_blank())
+
+map_od_le_ak <- ggplot() +
+  geom_sf(data = filter(od_le_class, STATEFP == "02"), mapping = aes(fill = bi_class),
+          color = "white", size = 0.1, show.legend = FALSE) +
+  bi_scale_fill(pal = "DkBlue", dim = 3) +
+  bi_theme() +
+  north(od_le_class, scale = 0.12) +
+  theme(axis.text.x = element_blank(),
+        axis.text.y = element_blank(), 
+        axis.ticks.x = element_blank(),
+        axis.ticks.y = element_blank(), 
+        axis.title = element_blank(),
+        rect = element_blank())
+
+legend_od_le <- bi_legend(pal = "DkBlue",
+                    dim = 3,
+                    xlab = "Higher OD Rate",
+                    ylab = "Higher LE",
+                    size = 8)
+
+od_le_bivariate <- ggdraw() +
+  draw_plot(map_od_le, 0, 0, 1, 1) +
+  draw_plot(legend_od_le, 0.7, 0.01, 0.25, 0.25) +
+  draw_plot(map_od_le_hi, 0.2, 0.01, 0.2, 0.2) + 
+  draw_plot(map_od_le_ak, 0.05, 0.08, 0.211, 0.211) + 
+  draw_plot(map_county, 0.022, 0.02, 0.96, 0.96) + 
+  draw_plot(map_county_hi, 0.223, 0.024, 0.16, 0.16) +
+  draw_plot(map_county_ak, -0.05, 0.018, 0.35, 0.35)
+
+od_le_bivariate
+```
+

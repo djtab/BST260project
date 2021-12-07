@@ -3,8 +3,8 @@ title: "BST 260 Group Project"
 author: "Christina, Dena, Jack, Veronica, Whitney"
 date: "11/22/2021"
 output:
-  pdf_document: default
   html_document: default
+  pdf_document: default
 ---
 
 ```{r}
@@ -563,5 +563,150 @@ tree_preds <- predict(tree_fit, newdata = test_set, type = "class")
 CFtree <- confusionMatrix(data = as.factor(tree_preds), reference = as.factor(test_set$life_exp), positive='1')
 CFtree
 
+# logistic life exp
+
+roc_log <- roc(test_set$life_exp, y_hat)
+
+# nb life exp
+
+roc_nb <- roc(as.factor(test_set$life_exp), p_hat_nb)
+
+# decision tree life exp
+tree_preds <- predict(tree_fit, newdata = test_set, type = "prob")[,2]
+roc_dt <- roc(test_set$life_exp, tree_preds)
+
+# random forest life exp
+roc_rf <- roc(test_set$DEATH_EVENT, preds_rf6)
+
+# confusion matrix
+CFrf2 <- confusionMatrix(data = as.factor(rf_res2), reference = as.factor(test_set2$overdose), positive='1')
+CFrf2
+
+# ROCs
+
+ggroc(list("Logistic" = roc_log, "Naive Bayes" = roc_nb, "Decision Tree" = roc_dt)) +
+  theme(legend.title = element_blank()) +
+  geom_segment(aes(x = 1, xend = 0, y = 0, yend = 1), color = "black", linetype = "dashed") +
+  xlab("Sensitivity") +
+  ylab("Specificity")+
+  ggtitle("Compare ROCs for Life Expectancy")+
+  theme(plot.title = element_text(hjust = 0.5))
+
+# overdose
+
+x2 <- stratified(pred_dat2, "overdose", 0.7, keep.rownames = TRUE)
+train_set2 <- x2 %>% dplyr::select(-rn)
+train_index2 <- as.numeric(x2$rn)
+test_set2 <- pred_dat2[-train_index2,]
+
+dim(train_set2)
+dim(test_set2)
+
+## Logistic regression
+fit2 <-  glm(overdose ~ `%.Food.Insecure`+	`%.Uninsured`+	`%.Some.College`+	`%.Unemployed`+	Median.Household.Income+ Violent.Crime.Rate+ `%.Insufficient.Sleep`, `%.Severe.Housing.Problems`+ Life.Expectancy, data= train_set2, family="binomial")
+
+p_hat2 <- predict(fit2, newdata = test_set2, type="response")
+y_hat2 <- ifelse(p_hat2 > 0.5, 1, 0)
+CF2 <- confusionMatrix(data = as.factor(y_hat2), reference = as.factor(test_set2$overdose), positive = '1')
+CF2
+
+## Naive Bayes
+set.seed(1)
+nb_fit2 <-  naiveBayes(overdose ~ `%.Food.Insecure`+	`%.Uninsured`+	`%.Some.College`+	`%.Unemployed`+	Median.Household.Income+ Violent.Crime.Rate+ `%.Insufficient.Sleep`+ `%.Severe.Housing.Problems`+ Life.Expectancy, data = train_set2)
+
+p_hat_nb2 <- predict(nb_fit2, test_set2, type = "raw")[,2]
+y_hat_nb2 <- factor(ifelse(p_hat_nb2 > 0.5, 1, 0))
+CFnb2 <- confusionMatrix(data = as.factor(y_hat_nb2), reference = as.factor(test_set2$overdose), positive = '1')
+CFnb2
+
+## decision tree
+library(rpart)
+set.seed(1)
+train_set2 <- train_set2  %>% dplyr::select(., overdose, `%.Food.Insecure`,	`%.Uninsured`,	`%.Some.College`,	`%.Unemployed`,	Median.Household.Income, Violent.Crime.Rate, `%.Insufficient.Sleep`, `%.Severe.Housing.Problems`, Life.Expectancy)
+tree_fit2 <- rpart(as.factor(overdose) ~ ., data = train_set2)
+tree_preds2 <- predict(tree_fit2, newdata = test_set2, type = "class")
+
+# confusion matrix
+CFtree2 <- confusionMatrix(data = as.factor(tree_preds2), reference = as.factor(test_set2$overdose), positive='1')
+CFtree2
+
+# logistic overdose
+
+roc_log2 <- roc(test_set2$overdose, y_hat2)
+
+# nb overdose
+
+roc_nb2 <- roc(as.factor(test_set2$overdose), p_hat_nb2)
+
+# decision tree overdose
+tree_preds2 <- predict(tree_fit2, newdata = test_set2, type = "prob")[,2]
+roc_dt2 <- roc(test_set2$overdose, tree_preds2)
+
+# ROCs overdose
+
+ggroc(list("Logistic" = roc_log2, "Naive Bayes" = roc_nb2, "Decision Tree" = roc_dt2)) +
+  theme(legend.title = element_blank()) +
+  geom_segment(aes(x = 1, xend = 0, y = 0, yend = 1), color = "black", linetype = "dashed") +
+  xlab("Sensitivity") +
+  ylab("Specificity")+
+  ggtitle("Compare ROCs for Overdose Mortality")+
+  theme(plot.title = element_text(hjust = 0.5))
+
+auc(roc_log)
+auc(roc_log2)
+auc(roc_nb)
+auc(roc_nb2)
+auc(roc_dt)
+auc(roc_dt2)
+
+# Variable importance from decision tree (life expectancy)
+
+dat_imp <- data.frame(imp = tree_fit$variable.importance)
+dat_imp <- dat_imp %>% 
+  tibble::rownames_to_column() %>% 
+  dplyr::rename("variable" = rowname) %>% 
+  dplyr::arrange(imp) %>%
+  dplyr::mutate(variable = forcats::fct_inorder(variable))
+ggplot2::ggplot(dat_imp) +
+  geom_col(aes(x = variable, y = imp),
+           col = "black", show.legend = FALSE) +
+  coord_flip() +
+  scale_fill_grey() +
+  theme_bw() + 
+  ggtitle("Variable Importance: Life Expectancy Prediction (Decision Tree)")
+
+# Variable importance from decision tree (overdose)
+
+dat_imp2 <- data.frame(imp = tree_fit2$variable.importance)
+dat_imp2 <- dat_imp2 %>% 
+  tibble::rownames_to_column() %>% 
+  dplyr::rename("variable" = rowname) %>% 
+  dplyr::arrange(imp) %>%
+  dplyr::mutate(variable = forcats::fct_inorder(variable))
+ggplot2::ggplot(dat_imp) +
+  geom_col(aes(x = variable, y = imp),
+           col = "black", show.legend = FALSE) +
+  coord_flip() +
+  scale_fill_grey() +
+  theme_bw() + 
+  ggtitle("Variable Importance: Overdose Mortality Prediction (Decision Tree)")
+
 ```
+
+Table for life Expectancy Prediction models
+
+| Model |Accuracy |Sensitivity | Specificity | AUC |
+| :---                |    :----:                     |  :----:                  | :----:           | :----:         |       ---:            |
+|Logistic| `r round(CF$overall["Accuracy"], 3)`| `r round(CF$byClass["Sensitivity"], 3)`|`r round(CF$byClass["Specificity"], 3)`| `r round(auc(roc_log), 3)`|
+|Naive Bayes| ``r round(CFnb$overall["Accuracy"], 3)`| `r round(CFnb$byClass["Sensitivity"], 3)`|`r round(CFnb$byClass["Specificity"], 3)`| `r round(auc(roc_nb), 3)`|
+|Decision Tree | `r round(CFtree$overall["Accuracy"], 3)`| `r round(CFtree$byClass["Sensitivity"], 3)`|`r round(CFtree$byClass["Specificity"], 3)`| `r round(auc(roc_dt), 3)`|
+
+Table for Overdose Mortality Prediction models
+
+| Model |Accuracy |Sensitivity | Specificity | AUC |
+| :---                |    :----:                     |  :----:                  | :----:           | :----:         |       ---:            |
+|Logistic| `r round(CF2$overall["Accuracy"], 3)`| `r round(CF2$byClass["Sensitivity"], 3)`|`r round(CF2$byClass["Specificity"], 3)`| `r round(auc(roc_log2), 3)`|
+|Naive Bayes| ``r round(CFnb2$overall["Accuracy"], 3)`| `r round(CFnb2$byClass["Sensitivity"], 3)`|`r round(CFnb2$byClass["Specificity"], 3)`| `r round(auc(roc_nb2), 3)`|
+|Decision Tree | `r round(CFtree2$overall["Accuracy"], 3)`| `r round(CFtree2$byClass["Sensitivity"], 3)`|`r round(CFtree2$byClass["Specificity"], 3)`| `r round(auc(roc_dt2), 3)`|
+
 

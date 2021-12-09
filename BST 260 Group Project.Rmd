@@ -434,7 +434,6 @@ od_le_bivariate
 
 
 ```{r}
-
 # prediction model
 
 # The built environment and place-based policies play important roles in life expectancy. They are also important factors in many of the epidemics facing America, including drug-related overdose mortality. It would be helpful to know what factors related to county-level characteristics help to predict differences in life expectancies and drug-related overdose mortality. 
@@ -457,7 +456,11 @@ od_le_bivariate
 # Severe housing problems
 # Median Household Income
 
+# subset data to use for prediciton model
+
 pred_dat <- dat %>% select(Life.Expectancy, `%.Fair.or.Poor.Health`, `Average.Number.of.Physically.Unhealthy.Days`,	`Average.Number.of.Mentally.Unhealthy.Days`,	`%.Low.birthweight`,	`%.Smokers`, `%.Adults.with.Obesity`,	`%.Food.Insecure`,	`%.Physically.Inactive`,	`%.Excessive.Drinking`,	`%.Uninsured`, `Primary.Care.Physicians.Rate`,	Mental.Health.Provider.Rate,	`%.Completed.High.School`, `%.Some.College`,	`%.Unemployed`,	Median.Household.Income, Violent.Crime.Rate, Average.Daily.PM2.5, `%.Severe.Housing.Problems`) %>% arrange(Life.Expectancy) %>% drop_na()
+
+# create correlation plot 
 
 library(GGally)
 library(ggplot2)
@@ -477,15 +480,29 @@ ggcorr(corr,
 
 # We will be using data from the county health rankings to explore predictors for the drug-related overdose mortality outcomes using the following variables:
 
-# Food Security = Food.Insecure 
-# Youth activities = Disconnected.Youth 
-# Home ownership = %.Homeowners
-# Gender = %.female
-# Urbanicity = %.rural
-# socioeconomic status = Median.Household.Income
+# Frequent.Physical.Distress
+# Frequent.Mental.Distress
+# percentage of Smokers
+# percentage Food Insecure
+# percentage Physically Inactive
+# percentage Excessive Drinking
+# percentage Uninsured
+# Primary.Care.Physicians.Rate
+# Mental.Health.Provider.Rate
+# percentage Completed.High.School
+# percentage completed Some.College
+# percentage Unemployed
+# SES, Median.Household.Income
+# Violent.Crime.Rate
+# percentage Insufficient.Sleep
+# percentage Severe.Housing.Problems
+# Life.Expectancy
+
+# subset prediction data
 
 pred_dat2 <- dat %>% select(Drug.Overdose.Mortality.Rate,`%.Frequent.Physical.Distress`, `%.Frequent.Mental.Distress`,	`%.Smokers`, `%.Food.Insecure`,	`%.Physically.Inactive`,	`%.Excessive.Drinking`,	`%.Uninsured`, `Primary.Care.Physicians.Rate`,	Mental.Health.Provider.Rate,	`%.Completed.High.School`, `%.Some.College`,	`%.Unemployed`,	Median.Household.Income, Violent.Crime.Rate, `%.Insufficient.Sleep`, `%.Severe.Housing.Problems`, Life.Expectancy) %>% arrange(Drug.Overdose.Mortality.Rate) %>% drop_na()
 
+# correlation plot
 corr2 <- cor(pred_dat2)
 ggcorr(corr2, 
        label = T, 
@@ -500,20 +517,32 @@ ggcorr(corr2,
        high = "blue",
        name = "Correlation")
 
+# fit linear prediction model for life expectancy 
 
 pred_fit <- glm(Life.Expectancy ~ ., data=pred_dat)
 summary(pred_fit)
 
+# fit linear prediction model for overdose mortality 
+
 pred_fit2 <- glm(Drug.Overdose.Mortality.Rate ~ ., data=pred_dat2)
 summary(pred_fit2)
+
+# identify average life expectancy and overdose mortality to dichotomize variables 
 avg.overdose <- mean(pred_dat2$Drug.Overdose.Mortality.Rate)
 avg.overdose
 avg.life <- mean(pred_dat$Life.Expectancy)
 avg.life
 
+# create data sets with dichotomized variables for outcomes of interest
+
 pred_dat <- pred_dat %>% mutate(life_exp = ifelse(Life.Expectancy >= avg.life, 0, 1))
 
 pred_dat2 <- pred_dat2 %>% mutate(overdose = ifelse(Drug.Overdose.Mortality.Rate >= avg.overdose, 1, 0))
+```
+
+
+```{r}
+# prediction models 
 
 library(tidyverse)
 library(splitstackshape)
@@ -524,9 +553,9 @@ library(dplyr)
 library(ggplot2)
 remotes::update_packages("rlang")
 
-
 set.seed(1)
 
+# come up with training and test sets 
 x <- stratified(pred_dat, "life_exp", 0.7, keep.rownames = TRUE)
 train_set <- x %>% dplyr::select(-rn)
 train_index <- as.numeric(x$rn)
@@ -535,24 +564,28 @@ test_set <- pred_dat[-train_index,]
 dim(train_set)
 dim(test_set)
 
-## Logistic regression
+## Logistic regression model
 fit <-  glm(life_exp ~ `%.Food.Insecure` +	`%.Uninsured` + `%.Some.College` +	`%.Unemployed` +	Median.Household.Income + Violent.Crime.Rate + Average.Daily.PM2.5 + `%.Severe.Housing.Problems`, data= train_set, family="binomial")
 
 p_hat <- predict(fit, newdata = test_set, type="response")
 y_hat <- ifelse(p_hat > 0.5, 1, 0)
+
+# confusion matrix
 CF <- confusionMatrix(data = as.factor(y_hat), reference = as.factor(test_set$life_exp), positive = '1')
 CF
 
-## Naive Bayes
+## Naive Bayes model
 set.seed(1)
 nb_fit <-  naiveBayes(life_exp ~ `%.Food.Insecure` +	`%.Uninsured` + `%.Some.College` +	`%.Unemployed` +	Median.Household.Income + Violent.Crime.Rate + Average.Daily.PM2.5 + `%.Severe.Housing.Problems`, data = train_set)
 
 p_hat_nb <- predict(nb_fit, test_set, type = "raw")[,2]
 y_hat_nb <- factor(ifelse(p_hat_nb > 0.5, 1, 0))
+
+# confusion matrix
 CFnb <- confusionMatrix(data = as.factor(y_hat_nb), reference = as.factor(test_set$life_exp), positive = '1')
 CFnb
 
-## decision tree
+## decision tree model
 library(rpart)
 set.seed(1)
 train_set <- train_set  %>% dplyr::select(., life_exp, `%.Food.Insecure` ,	`%.Uninsured` , `%.Some.College` ,	`%.Unemployed`,	Median.Household.Income , Violent.Crime.Rate , Average.Daily.PM2.5 , `%.Severe.Housing.Problems`)
@@ -575,14 +608,8 @@ roc_nb <- roc(as.factor(test_set$life_exp), p_hat_nb)
 tree_preds <- predict(tree_fit, newdata = test_set, type = "prob")[,2]
 roc_dt <- roc(test_set$life_exp, tree_preds)
 
-# random forest life exp
-roc_rf <- roc(test_set$DEATH_EVENT, preds_rf6)
 
-# confusion matrix
-CFrf2 <- confusionMatrix(data = as.factor(rf_res2), reference = as.factor(test_set2$overdose), positive='1')
-CFrf2
-
-# ROCs
+# ROCs for life expectancy
 
 ggroc(list("Logistic" = roc_log, "Naive Bayes" = roc_nb, "Decision Tree" = roc_dt)) +
   theme(legend.title = element_blank()) +
@@ -592,7 +619,9 @@ ggroc(list("Logistic" = roc_log, "Naive Bayes" = roc_nb, "Decision Tree" = roc_d
   ggtitle("Compare ROCs for Life Expectancy")+
   theme(plot.title = element_text(hjust = 0.5))
 
-# overdose
+# overdose mortality
+
+# creat training and test sets
 
 x2 <- stratified(pred_dat2, "overdose", 0.7, keep.rownames = TRUE)
 train_set2 <- x2 %>% dplyr::select(-rn)
@@ -602,24 +631,28 @@ test_set2 <- pred_dat2[-train_index2,]
 dim(train_set2)
 dim(test_set2)
 
-## Logistic regression
+## Logistic regression model
 fit2 <-  glm(overdose ~ `%.Food.Insecure`+	`%.Uninsured`+	`%.Some.College`+	`%.Unemployed`+	Median.Household.Income+ Violent.Crime.Rate+ `%.Insufficient.Sleep`, `%.Severe.Housing.Problems`+ Life.Expectancy, data= train_set2, family="binomial")
 
 p_hat2 <- predict(fit2, newdata = test_set2, type="response")
 y_hat2 <- ifelse(p_hat2 > 0.5, 1, 0)
+
+# confusion matrix
 CF2 <- confusionMatrix(data = as.factor(y_hat2), reference = as.factor(test_set2$overdose), positive = '1')
 CF2
 
-## Naive Bayes
+## Naive Bayes model
 set.seed(1)
 nb_fit2 <-  naiveBayes(overdose ~ `%.Food.Insecure`+	`%.Uninsured`+	`%.Some.College`+	`%.Unemployed`+	Median.Household.Income+ Violent.Crime.Rate+ `%.Insufficient.Sleep`+ `%.Severe.Housing.Problems`+ Life.Expectancy, data = train_set2)
 
 p_hat_nb2 <- predict(nb_fit2, test_set2, type = "raw")[,2]
 y_hat_nb2 <- factor(ifelse(p_hat_nb2 > 0.5, 1, 0))
+
+# confusion matrix
 CFnb2 <- confusionMatrix(data = as.factor(y_hat_nb2), reference = as.factor(test_set2$overdose), positive = '1')
 CFnb2
 
-## decision tree
+## decision tree model
 library(rpart)
 set.seed(1)
 train_set2 <- train_set2  %>% dplyr::select(., overdose, `%.Food.Insecure`,	`%.Uninsured`,	`%.Some.College`,	`%.Unemployed`,	Median.Household.Income, Violent.Crime.Rate, `%.Insufficient.Sleep`, `%.Severe.Housing.Problems`, Life.Expectancy)
@@ -651,7 +684,15 @@ ggroc(list("Logistic" = roc_log2, "Naive Bayes" = roc_nb2, "Decision Tree" = roc
   ylab("Specificity")+
   ggtitle("Compare ROCs for Overdose Mortality")+
   theme(plot.title = element_text(hjust = 0.5))
+```
 
+
+
+```{r}
+
+# identifying best model 
+
+# areas under the curve 
 auc(roc_log)
 auc(roc_log2)
 auc(roc_nb)

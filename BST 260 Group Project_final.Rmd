@@ -1,0 +1,1128 @@
+---
+title: "BST 260 Group Project"
+author: "Christina, Dena, Jack, Veronica, Whitney"
+date: "11/22/2021"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r}
+#some basic packages that we will probably want: 
+library(tidyverse)
+library(lubridate)
+library(rvest)
+
+#package to read in xlsx files from a url:
+library(openxlsx)
+```
+
+# Analysis 1: Data scraping, cleaning and merging
+
+Obtain County Health Ranking Data sheets, as well as county-level COVID data from NYT:
+
+```{r}
+#County Health Ranking Data:
+dat <- read.xlsx("https://www.countyhealthrankings.org/sites/default/files/media/document/2021%20County%20Health%20Rankings%20Data%20-%20v1.xlsx", sheet = 4, startRow = 2)
+
+#County Health Ranking Data second sheet:
+dat2 <- read.xlsx("https://www.countyhealthrankings.org/sites/default/files/media/document/2021%20County%20Health%20Rankings%20Data%20-%20v1.xlsx", sheet = 6, startRow = 2)
+
+#Cumulative County-level COVID data:
+covid_dat <- read.csv(url("https://raw.githubusercontent.com/nytimes/covid-19-data/master/us-counties.csv"))
+```
+
+Web scraping for County names and population from Wikipedia:
+
+```{r}
+
+url <- "https://en.wikipedia.org/wiki/List_of_United_States_counties_and_county_equivalents"
+tab = read_html(url) %>% html_nodes("table")
+
+county_names <- c("county", "state", "population_2019", "delete")
+counties <- tab %>% .[1] %>% html_table %>% .[[1]] %>% setNames(county_names)
+
+counties <- counties %>% 
+  select(!delete)
+
+#make population_2019 numeric:
+counties$population_2019 <- as.numeric(gsub(",","", counties$population_2019))
+
+```
+
+Data Manipulation and Merging:
+
+```{r}
+#Filter COVID data to most recent date, then arrange by state:
+covid_dat <- covid_dat %>%
+  filter(date == '2021-11-21') %>%
+  select(!fips) %>%
+  arrange(state)
+
+#Make a list of the column names that we're interested in for dat:
+columns <- c("FIPS",	"State",	"County", "Years.of.Potential.Life.Lost.Rate", "%.Fair.or.Poor.Health", "Average.Number.of.Physically.Unhealthy.Days",	"Average.Number.of.Mentally.Unhealthy.Days",	"%.Low.birthweight",	"%.Smokers", "%.Adults.with.Obesity",	"Food.Environment.Index",	"%.Physically.Inactive",	"%.With.Access.to.Exercise.Opportunities",	"%.Excessive.Drinking",	"#.Alcohol-Impaired.Driving.Deaths",	"#.Driving.Deaths",	"%.Driving.Deaths.with.Alcohol.Involvement",	"Chlamydia.Rate",	"Teen.Birth.Rate",	"%.Uninsured", "Primary.Care.Physicians.Rate",	"Primary.Care.Physicians.Ratio",	"Dentist.Rate",	"Dentist.Ratio",	"Mental.Health.Provider.Rate",	"Mental.Health.Provider.Ratio",	"Preventable.Hospitalization.Rate",	"%.With.Annual.Mammogram",	"%.Vaccinated",	"%.Completed.High.School",	"%.Some.College",	"%.Unemployed",	"%.Children.in.Poverty",	"Income.Ratio",	"%.Children.in.Single-Parent.Households",	"Social.Association.Rate", "Violent.Crime.Rate",	"Injury.Death.Rate",	"Average.Daily.PM2.5",	"Presence.of.Water.Violation", "%.Severe.Housing.Problems",	"%.Drive.Alone.to.Work", "%.Long.Commute.-.Drives.Alone")
+
+#Keep only the columns from our list above, rename to match COVID data, arrange by state:
+dat <- dat %>%
+  select(columns) %>%
+  rename(county = County) %>%
+  rename(state = State) %>%
+  rename(fips = FIPS) %>%
+  arrange(state)
+
+#Make a list of the column names we're interested in for dat2:
+columns2 <- c("FIPS",	"State",	"County", "Life.Expectancy",	"Age-Adjusted.Death.Rate",	"Child.Mortality.Rate",	"Infant.Mortality.Rate",	"%.Frequent.Physical.Distress",	"%.Frequent.Mental.Distress",	"%.Adults.with.Diabetes",	"HIV.Prevalence.Rate",	"%.Food.Insecure",	"%.Limited.Access.to.Healthy.Foods",	"Drug.Overdose.Mortality.Rate",	"Motor.Vehicle.Mortality.Rate",	"%.Insufficient.Sleep",	"%.Disconnected.Youth",	"Average.Grade.Performance",	"Median.Household.Income",	"%.Enrolled.in.Free.or.Reduced.Lunch",	"Homicide.Rate",	"Suicide.Rate.(Age-Adjusted)",	"Firearm.Fatalities.Rate",	"Juvenile.Arrest.Rate",	"%.Homeowners",	"%.Broadband.Access",	"%.Female",	"%.Rural")
+
+#Keep only the columns from our list above, rename to match COVID data, arrange by state:
+dat2 <- dat2 %>%
+  select(columns2) %>%
+  rename(county = County) %>%
+  rename(state = State) %>%
+  rename(fips = FIPS) %>%
+  arrange(state)
+
+#Merge dat with dat2, then merge with COVID data:
+dat <- dat %>%
+  inner_join(dat2, by=c("county", "state"))
+
+dat <- dat %>%
+  left_join(covid_dat, by=c("county", "state"))
+
+#Finally, merge dat with counties for population:
+dat <- dat %>%
+  left_join(counties, by=c("county", "state"))
+
+```
+
+# Analysis 2: Data Visualizations 
+
+## Analysis 2.2: Boxplot of median household income per state
+
+```{r}
+##box plot of household income per state 
+p <- dat %>% 
+  mutate(state = reorder(state, Median.Household.Income, FUN = median)) %>%
+  ggplot(aes(state, Median.Household.Income, fill = state)) +
+  geom_boxplot() + 
+  theme_bw() +
+  ggtitle("Boxplots of Median Household Income by State")  +
+  theme_update(plot.title = element_text(hjust = 0.6)) + 
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+  xlab("State") + ylab("Median Household Income")+
+  theme(legend.position = "none")
+p 
+
+
+```
+
+## Analysis 2.3: Life Expectancy
+
+```{r}
+#box plot of life expectancy by state
+p2 <- dat %>% 
+  mutate(state = reorder(state, Life.Expectancy, FUN = median), is.na(Life.Expectancy)) %>%
+  ggplot(aes(x = reorder(state, Life.Expectancy), y = Life.Expectancy, fill = state)) +
+  geom_boxplot() + 
+  theme_bw() +
+  theme(legend.position = "none") + 
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+  theme(plot.title = element_text(hjust = 0.5)) + 
+  ggtitle("Boxplots of Life Expectancy by State") + 
+  xlab("State") + ylab("Life Expectancy (years)")
+
+p2
+
+
+###Extra code to assess individual state statistics
+#something <- dat %>% select(state, Life.Expectancy, county) %>% group_by(state) %>%
+#                mutate(median_life = median(Life.Expectancy)) %>% ungroup()
+#something
+
+#something2 <- dat %>% filter(state == "Mississippi", !is.na(Life.Expectancy))
+##something2
+#median(something2$Life.Expectancy)
+
+#code to determine distribution of life expectancy variable 
+#mean(dat$Life.Expectancy, na.rm = TRUE)
+#min(dat$Life.Expectancy, na.rm = TRUE)
+#summary(dat$Life.Expectancy)
+
+
+#selecting the top 24 counties with the lowest life expectancy
+p3 <- dat %>% select(county, state, Life.Expectancy) %>% arrange(Life.Expectancy)%>% 
+          filter(Life.Expectancy <= 69.7)
+
+#creating a line plot of descending order of life expectancy
+p4 <- p3 %>% ggplot(aes(x = reorder(county, -Life.Expectancy), y = Life.Expectancy, group = 1)) +
+            geom_point() +
+            geom_line() + 
+            theme_bw() + 
+            ggtitle("Top 25 Counties With the Shortest Life Expectancy in the United States") +
+            theme(plot.title = element_text(hjust = 0.5)) + 
+            theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+            xlab("U.S County") + ylab("Life Expectancy (years)") 
+
+#adding state abbreviations to county line plot
+p4 + scale_x_discrete("U.S. County", labels = c("Oglala Lakota" = "Oglala Lakota (SD)", "Buffalo" = " Buffalo (SD)", "Corson" = "Corson (SD)", "Mellette" = " Mellette (SD)", "Covington City" = "Covington City (VA)" , "Kusilvak" = "Kusilvak (AK)", "Todd" = " Todd (SD)", "Petersburg City" = "Petersburg City (VA)", "Galax City" = "Galax City (VA)", "Roosevelt" = "Roosevelt (MT)", "Martinsville City" = "Martinsville City (VA)", "Dewey" = "Dewey (SD)", "Big Horn" = "Big Horn (MT)", "Union" = "Union (FL)", "Sioux" = "Sioux (ND)", "Perry" = "Perry (KY)",  "Kingman" = "Kingman (KS)", "McDowell" = "McDowell (WV)", "Edwards" = "Edwards (KS)", "Bennett" = "Bennett (SD)", "Owsley" = "Owsley (KY)", "Thurston" = "Thurston (NE)", "Breathitt" = "Breathitt (KY)", "Okfuskee" = "Okfuskee (OK)", "Logan" = "Logan (WV)"))
+
+##histogram of life expectancy in the united states
+p5 <- dat %>% ggplot(aes(x = Life.Expectancy)) +
+              geom_histogram(binwidth = 0.2, color = "black", fill = "light blue") + 
+              theme_bw()+ 
+              ggtitle("Life Expectancy Distribution in the United States") +
+              theme(plot.title = element_text(hjust = 0.5)) +
+              xlab("Life Expectancy (years)") 
+
+p5 + geom_vline(aes(xintercept = mean(Life.Expectancy, na.rm = TRUE)), col='dark red',size=1)
+
+#Code for distribution statistics 
+#sd(dat$Life.Expectancy, na.rm = TRUE)
+#mean(dat$Life.Expectancy, na.rm = TRUE)
+
+
+```
+
+## Analysis 2.4: Drug overdose mortality rate 
+
+```{r}
+#####Drug Overdose Mortality
+#Histogram for drug overdose Mortality variable 
+p6 <- dat %>% ggplot(aes(x = `Drug.Overdose.Mortality.Rate`)) +
+              geom_histogram(binwidth = 0.75, color = "black", fill = "gray") + 
+              theme_bw()+ 
+              ggtitle("Distribution of Drug Overdose Mortality Rates per 100,000 population in the U.S.") +
+              theme(plot.title = element_text(hjust = 0.5)) +
+              xlab("Drug Overdose Mortality Rate (per 100,000 population)") 
+p6 + geom_vline(aes(xintercept = median(`Drug.Overdose.Mortality.Rate`, na.rm = TRUE)), col='dark red',size=1) 
+
+#Code for distribution statistics 
+#median(dat$`Drug.Overdose.Mortality.Rate`, na.rm = TRUE)
+#IQR(dat$`Drug.Overdose.Mortality.Rate`, na.rm = TRUE)
+#max(dat$`Drug.Overdose.Mortality.Rate`, na.rm = TRUE)
+
+#boxplot of drug overdose mortality rate by state
+p7 <- dat %>% 
+  ggplot(aes(x = reorder(state, Drug.Overdose.Mortality.Rate) , y = Drug.Overdose.Mortality.Rate, fill = state))+
+  geom_boxplot() + 
+  theme_bw() +
+  ggtitle("Boxplots of Drug Overdose Mortality Rate by State")  +
+  theme_update(plot.title = element_text(hjust = 0.5)) + 
+  theme(axis.text.x = element_text(angle = 90, hjust = 0.5)) +
+  theme(axis.text.y = element_text(size = 0.1)) + ##need to adjust the size of text 
+  xlab("State") + ylab("Drug Overdose Mortality Rate per 100,000 Pop.")+ #change size of text
+  theme(legend.position = "none")
+
+p7 
+###Extra code to assess individual state statistics
+#something2 <- dat %>% filter(state == "West Virginia", !is.na(Drug.Overdose.Mortality.Rate))
+#something2
+
+#code to determine the top 25 counties with highest drug overdose mortality rate
+p8 <- dat %>% select(county, state, Drug.Overdose.Mortality.Rate) %>% arrange(Drug.Overdose.Mortality.Rate) %>%
+          filter(Drug.Overdose.Mortality.Rate >= 61) 
+
+#creating a line plot of ascending order of drug overdose mortality rate
+p9 <- p8 %>% ggplot(aes(x = reorder(county, Drug.Overdose.Mortality.Rate), y = Drug.Overdose.Mortality.Rate, group = 1)) +
+            geom_point() +
+            geom_line() + 
+            theme_bw() + 
+            theme(plot.title = element_text(hjust = 0.5)) + 
+            theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+            theme(axis.text.y = element_text(size = 0.5)) +
+            ggtitle("Top 25 Counties With the Highest Drug Overdose Mortality Ratio in the U.S.") +
+            xlab("U.S County") + ylab("Drug Overdose Mortality Ratio (per 100,000 pop.)") 
+
+#adding state abbreviations to county line plot
+p9 + scale_x_discrete("U.S. County", labels = c("Kenton" = "Kenton (KY)", "Lake" = " Lake (CA)", "Cheatham" = "Cheatham (TN)", "Hampshire" = " Hampshire (WV)", "Owen" = "Owen (KY)", "Gallia" = "Gallia (OH)", "Lincoln" = "Lincoln (WV)", "Boyd" = "Boyd (KY)", "Union" = "Union (IN)", "Estill" = "Estill (KY)", "Fayette" = "Fayette (WV) & (IN)", "Mahnomen" = "Mahnomen (MN)", "Cecil" = "Cecil (MD)", "Montgomery" = "Montgomery (OH)", "Kanawha" = "Kanawha (WV)", "Gallatin" = "Gallatin (KY)", "Boone" = "Boone (WV)", "Rio Arriba" = "Rio Arriba (NM)", "Raleigh" = "Raleigh (WV)", "Wayne" = "Wayne	(IN)", "Scioto" = "Scioto (OH)", "Logan" = "Logan (WV)", "Wayne" = "Wayne (WV)", "Cabell" = "Cabell (WV)", "Berkeley" = "Berkeley (WV)"))
+
+
+```
+
+##Analysis 2.5: Scatter plot of life expectancy vs. drug over dose mortality rate
+
+```{r}
+###Scatter plot of drug over dose mortality and life expectancy 
+p10 <- dat %>% ggplot(aes(x = Drug.Overdose.Mortality.Rate, y = Life.Expectancy)) +
+            geom_point(size = 1) + 
+            ggtitle("Scatter Plot of Life Expectancy vs. Drug Overdose Mortality Rate (per 100,000 population)") +
+            theme(plot.title = element_text(size = 10)) + 
+            xlab("Drug Overdose Mortality Rate (per 100,000 population)") + 
+            ylab("Life Expectancy (years)") 
+
+#adding a trend line to the scatter plot     
+p10 + geom_smooth(method = "lm")
+
+```
+
+## Analysis 2.6: Food Insecurity
+
+```{r}
+####Food Insecurity
+#histogram of food insecurity
+p_food <- dat %>% ggplot(aes(x = `%.Food.Insecure`)) +
+              geom_histogram(binwidth = 0.75, color = "black", fill = "gray") + 
+              theme_bw()+ 
+              ggtitle("Distribution of Food Insecurity % in the U.S.") +
+              theme(plot.title = element_text(hjust = 0.5)) +
+              xlab("Food Insecurity %") 
+
+#code to add line where the mean value is located 
+p_food + geom_vline(aes(xintercept = mean(`%.Food.Insecure`, na.rm = TRUE)), col='dark red',size=1) 
+
+#code for distribution statistics 
+#mean(dat$`%.Food.Insecure`, na.rm = TRUE)
+#sd(dat$`%.Food.Insecure`, na.rm = TRUE)
+
+#selecting the top 25 counties with the highest food insecurity %
+p11 <- dat %>% select(county, state, `%.Food.Insecure`) %>% arrange(`%.Food.Insecure`)%>% 
+          filter(`%.Food.Insecure` >= 23.9)
+
+#creating a line plot of ascending order of food insecurity %
+p12 <- p11 %>% ggplot(aes(x = reorder(county, `%.Food.Insecure`), y = `%.Food.Insecure`, group = 1)) +
+            geom_point() +
+            geom_line() + 
+            theme_bw() + 
+            ggtitle("Top 25 Counties With the Highest Food Insecurity % in the United States") +
+            theme(plot.title = element_text(hjust = 0.5)) + 
+            theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+            xlab("U.S County") + ylab("Food Insecurity %") 
+
+#adding state abbreviations to county line plot
+p12 + scale_x_discrete("U.S. County", labels = c("Chicot" = "Chicot (AR)", "Coahoma" = "Coahoma (MS)", "Bolivar" = "Bolivar (MS)", "Clay" = " Clay (GA) & Clay (KY)", "Leflore" = "Leflore (MS)", "Wolfe" = "Wolfe (KY)", "Washington" = "Washington (MS)", "Breathitt" = "Breathitt (KY)", "Wilcox" = "Wilcox (AL)", "Bell" = "Bell (KY)", "Magoffin" = "Magoffin (KY)", "Harlan" = "Harlan (KY)", "Wilkinson" = "Wilkinson (MS)", "Quitman" = "Quitman (MS)", "Phillips" = "Phillips (AR)", "Todd" = "Todd (SD)", "Greene" = "Greene (AL)", "Humphreys" = "Humphreys (MS)", "Oglala Lakota" = "Oglala Lakota (SD)", "Perry" = "Perry (AL)", "Claiborne" = "Claiborne (MS)", "Holmes" = "Holmes (MS)", "Issaquena" = "Issaquena (MS)", "Jefferson" = "Jefferson (MS)"))
+
+```
+
+## Analysis 2.7: Severe Housing Problems 
+
+```{r}
+#histogram of severe housing problems
+p_housing <- dat %>% ggplot(aes(x = `%.Severe.Housing.Problems`)) +
+              geom_histogram(binwidth = 0.75, color = "black", fill = "gray") + 
+              theme_bw()+ 
+              ggtitle("Distribution of Severe Housing % in the U.S.") +
+              theme(plot.title = element_text(hjust = 0.5)) +
+              xlab("Severe Housing Probelms %") 
+
+#code to add line where the mean value is located 
+p_housing + geom_vline(aes(xintercept = mean(`%.Severe.Housing.Problems`, na.rm = TRUE)), col='dark red',size=1) 
+
+#code for distribution statistics 
+#mean(dat$`%.Severe.Housing.Problems`, na.rm = TRUE)
+#sd(dat$`%.Severe.Housing.Problems`, na.rm = TRUE)
+
+#selecting the top 25 counties with the highest severe housing problems %
+p13 <- dat %>% select(county, state, `%.Severe.Housing.Problems`) %>% arrange(`%.Severe.Housing.Problems`)%>% 
+          filter(`%.Severe.Housing.Problems` >= 26.43805)
+
+#creating a line plot of ascending order of housing problems in top 25 counties 
+p14 <- p13 %>% ggplot(aes(x = reorder(county, `%.Severe.Housing.Problems`), y = `%.Severe.Housing.Problems`, group = 1)) +
+            geom_point() +
+            geom_line() + 
+            theme_bw() + 
+            ggtitle("Top 25 Counties With the Highest Severe Housing Problems % in the United States") +
+            theme(plot.title = element_text(hjust = 0.5)) + 
+            theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+            xlab("U.S County") + ylab("Severe Housing Problems %") 
+
+#adding state abbreviations to county line plot
+p14 + scale_x_discrete("U.S. County", labels = c("Imperial" = "Imperial (CA)", "Mendocino" = "Mendocino (CA)", "Tunica" = "Tunica (MS)", "Rockland" = " Rockland (NY)", "Orange" = "Orange (CA)", "Ziebach" = "Ziebach (SD)", "Fresno" = "Fresno (CA)", "Tulare" = "Tulare (CA)", "Santa Cruz" = "Santa Cruz (CA)", "Todd" = "Todd (SD)", "Essex" = "Essex (NJ)", "Alpine" = "Alpine (CA)", "Hudson" = "Hudson (NJ)", "San Miguel" = "San Miguel (CO)", "McKinley" = "McKinley (NM)", "Webb" = "Webb (TX)", "Santa Barbara" = "Santa Barbara (CA)", "Buffalo" = "Buffalo (SD)", "Monterey" = "Monterey (CA)", "Miami-Dade" = "Miami-Dade (FL)", "Passaic" = "Passaic (NJ)", "Apache" = "Apache (AZ)", "Madison" = "Madison (ID)", "Los Angeles" = "Los Angeles (CA)", "Oglala Lakota" = "Oglala Lakota	(SD)"))
+
+```
+
+## Analysis 2.8: Some College 
+
+```{r}
+#histogram of some college variable 
+p_college <- dat %>% ggplot(aes(x = `%.Some.College`)) +
+              geom_histogram(binwidth = 0.75, color = "black", fill = "gray") + 
+              theme_bw()+ 
+              ggtitle("Distribution of Some College % in the U.S.") +
+              theme(plot.title = element_text(hjust = 0.5)) +
+              xlab("Some College %") 
+
+#code to add line where the mean value is located 
+p_college + geom_vline(aes(xintercept = mean(`%.Some.College`, na.rm = TRUE)), col='dark red',size=1) 
+
+#code for distribution statistics 
+#mean(dat$`%.Some.College`, na.rm = TRUE)
+#sd(dat$`%.Some.College`, na.rm = TRUE)
+
+
+#selecting the top 25 counties with the lowest some college %
+p14 <- dat %>% select(county, state, `%.Some.College`) %>% arrange(`%.Some.College`)%>%
+          filter(`%.Some.College` < 29.86)
+
+#line plot for uninsured in the top 25 counties
+p15 <- p14 %>% ggplot(aes(x = reorder(county, -`%.Some.College`), y = `%.Some.College`, group = 1)) +
+            geom_point() +
+            geom_line() + 
+            theme_bw() + 
+            ggtitle("Top 25 Counties With the Lowest Some College % in the United States") +
+            theme(plot.title = element_text(hjust = 0.5)) + 
+            theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+            xlab("U.S County") + ylab("Some College %") 
+
+#adding state abbreviations to county line plot
+p15 + scale_x_discrete("U.S. County", labels = c("Kenedy" = "Kenedy (TX)", "Jeff Davis" = "Jeff Davis (TX)", "La Salle" = "La Salle (TX)", "Forest" = " Forest (PA)", "Holmes" = "Holmes (OH)", "Taliaferro" = "Taliaferro (GA)", "Kusilvak" = "Kusilvak (AK)", "DeSoto" = "DeSoto (FL)", "Hudspeth" = "Hudspeth (TX)", "Lincoln" = "Lincoln (CO)", "Hancock" = "Hancock (GA)", "Tensas" = "Tensas (LA)", "McDowell" = "McDowell (WV)", "Garza" = "Garza (TX)", "Telfair" = "Telfair (GA)", "Hamilton" = "Hamilton (FL)", "Hardee" = "Hardee (FL)", "Stewart" = "Stewart (GA)", "East Carroll" = "East Carroll (LA)", "LaGrange" = "LaGrange (IN)", "Bent" = "Bent (CO)", "Real" = "Real (TX)", "Glades" = "Glades (FL)", "Issaquena" = "Issaquena (MS)", "Wolfe" = "Wolfe (KY)", "Gaines" = "Gaines (TX)", "Lake" = "Lake (TN)", "Menard" = "Menard	(TX)"))
+
+```
+
+## Analysis 2.9: Uninsured
+
+```{r}
+#histogram of uninsured variable 
+p_uninsured <- dat %>% ggplot(aes(x = `%.Uninsured`)) +
+              geom_histogram(binwidth = 0.75, color = "black", fill = "gray") + 
+              theme_bw()+ 
+              ggtitle("Distribution of Uninsured % in the U.S.") +
+              theme(plot.title = element_text(hjust = 0.5)) +
+              xlab("Uninsured %") 
+
+#code to add line where the median value is located 
+p_uninsured + geom_vline(aes(xintercept = median(`%.Uninsured`, na.rm = TRUE)), col='dark red',size=1) 
+
+#code for distribution statistics 
+#median(dat$`%.Uninsured`, na.rm = TRUE)
+#IQR(dat$`%.Uninsured`, na.rm = TRUE)
+
+#selecting the top 25 counties with the highest uninsured %
+p16 <- dat %>% select(county, state, `%.Uninsured`) %>% arrange(desc(`%.Uninsured`))%>%
+          filter(`%.Uninsured` > 27.1)
+
+#line plot for uninsured in the top 25 counties
+p17 <- p16 %>% ggplot(aes(x = reorder(county, `%.Uninsured`), y = `%.Uninsured`, group = 1)) +
+            geom_point() +
+            geom_line() + 
+            theme_bw() + 
+            ggtitle("Top 25 Counties With the Highest Uninsured % in the United States") +
+            theme(plot.title = element_text(hjust = 0.5)) + 
+            theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+            xlab("U.S County") + ylab("Uninsured %") 
+
+#adding state abbreviations to county line plot
+p17 + scale_x_discrete("U.S. County", labels = c("Gaines" = "Gaines (TX)", "Hidalgo" = "Hidalgo (TX)", "Presidio" = "Presidio (TX)", "Cameron" = " Cameron (TX)", "Dallam" = "Dallam (TX)", "Collingsworth" = "Collingsworth (TX)", "Starr" = "Starr (TX)", "Webb" = "Webb (TX)", "Jeff Davis" = "Jeff Davis (TX)", "Bailey" = "Bailey (TX)", "Castro" = "Castro (TX)", "Zapata" = "Zapata (TX)", "Hall" = "Hall (TX)", "Menard" = "Menard (TX)", "Sherman" = "Sherman (TX)", "Hudspeth" = "Hudspeth (TX)", "Parmer" = "Parmer (TX)", "San Saba" = "San Saba (TX)", "Lipscomb" = "Lipscomb (TX)", "Hansford" = "Hansford (TX)", "Maverick" = "Maverick (TX)", "Mason" = "Mason (TX)", "Hendry" = "Hendry (FL)", "Ochiltree" = "Ochiltree (TX)", "Clark" = "Clark	(ID)"))
+```
+
+## Analysis 2.10: Unemployment 
+
+```{r}
+#histogram of unemployment variable 
+p_unemployed <- dat %>% ggplot(aes(x = `%.Unemployed`)) +
+              geom_histogram(binwidth = 0.75, color = "black", fill = "gray") + 
+              theme_bw()+ 
+              ggtitle("Distribution of Unemployed % in the U.S.") +
+              theme(plot.title = element_text(hjust = 0.5)) +
+              xlab("Unemployed %") 
+
+#code to add line where the median value is located 
+p_unemployed + geom_vline(aes(xintercept = median(`%.Unemployed`, na.rm = TRUE)), col='dark red',size=1) 
+
+#code for distribution statistics 
+#median(dat$`%.Unemployed`, na.rm = TRUE)
+#IQR(dat$`%.Unemployed`, na.rm = TRUE)
+
+#selecting the top 25 counties with the highest violence crime rate 
+p18 <- dat %>% select(county, state, `%.Unemployed`) %>% arrange(desc(`%.Unemployed`))%>%
+              filter(`%.Unemployed` > 8.6)
+
+#line plot for violent crime rate in the top 25 counties
+p19 <- p18 %>% ggplot(aes(x = reorder(county, `%.Unemployed`), y = `%.Unemployed`, group = 1)) +
+            geom_point() +
+            geom_line() + 
+            theme_bw() + 
+            ggtitle("Top 25 Counties With the Highest Unemployed % in the United States") +
+            theme(plot.title = element_text(hjust = 0.5)) + 
+            theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+            xlab("U.S County") + ylab("Unemployment %") 
+
+#adding state abbreviations to county line plot
+p19 + scale_x_discrete("U.S. County", labels = c("Imperial" = "Imperial (CA)", "Yuma" = "Yuma (AZ)", "Jefferson" = "Jefferson (MS)", "Calhoun" = "Calhoun (WV)", "Colusa" = "Colusa (CA)", "Luna" = "Luna (NM)", "Ferry" = "Ferry (WA)", "Issaquena" = "Issaquena (MS)", "Magoffin" = "Magoffin (KY)", "Claiborne" = "Claiborne (MS)", "Holmes" = "Holmes (MS)", "Wilkinson" = "Wilkinson (MS)", "Humphreys" = "Humphreys (MS)", "Apache" = "Apache (AZ)", "Starr" = "Starr (TX)", "Oglala Lakota" = "Oglala Lakota (SD)", "Tulare" = "Tulare (CA)", "Harlan" = "Harlan (KY)", "Roane" = "Roane (WV)", "Telfair" = "Telfair (GA)", "Mackinac" = "Mackinac (MI)", "McDowell" = "McDowell (WV)", "Lewis" = "Lewis (KY)", "Sunflower" = "Sunflower (MS)", "Cheboygan" = "Cheboygan	(MI)"))
+```
+
+## Analysis 2.11: Violent Crime Rate 
+
+```{r}
+#histogram of violent crime rate variable 
+p_violence <- dat %>% ggplot(aes(x = `Violent.Crime.Rate`)) +
+              geom_histogram(binwidth = 75, color = "black", fill = "gray") + 
+              theme_bw()+ 
+              ggtitle("Distribution of Violent Crime Rate in the U.S.") +
+              theme(plot.title = element_text(hjust = 0.5)) +
+              xlab("Violent Crime Rate") 
+#code to add line where the mean value is located 
+p_violence + geom_vline(aes(xintercept = median(`Violent.Crime.Rate`, na.rm = TRUE)), col='dark red',size=1) 
+
+#code for distribution statistics 
+#median(dat$`Violent.Crime.Rate`, na.rm = TRUE)
+#IQR(dat$`Violent.Crime.Rate`, na.rm = TRUE)
+
+#selecting the top 25 counties with the highest violence crime rate 
+p20 <- dat %>% select(county, state, `Violent.Crime.Rate`) %>% arrange(desc(`Violent.Crime.Rate`))%>%
+              filter(`Violent.Crime.Rate` > 894)
+
+#line plot for violent crime rate in the top 25 counties
+p21 <- p20 %>% ggplot(aes(x = reorder(county, `Violent.Crime.Rate`), y = `Violent.Crime.Rate`, group = 1)) +
+            geom_point() +
+            geom_line() + 
+            theme_bw() + 
+            ggtitle("Top 25 Counties With the Highest Violent Crime Rate in the United States") +
+            theme(plot.title = element_text(hjust = 0.5)) + 
+            theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+            xlab("U.S County") + ylab("Rate per 100,000 population") 
+
+#adding state abbreviations to county line plot
+p21 + scale_x_discrete("U.S. County", labels = c("Calhoun" = "Calhoun (GA)", "Shelby" = "Shelby (TN)", "Alexander" = "Alexander (IL)", "Turner" = "Turner (GA)", "Crittenden" = "Crittenden (AR)", "Marion" = "Marion (IN)", "Phillips" = "Phillips (AR)", "Davidson" = "Davidson (TN)", "Haywood" = "Haywood (TN)", "Levy" = "Levy (FL)", "Pulaski" = "Pulaski (AR)", "Milwaukee" = "Milwaukee (WI)", "Wayne" = "Wayne (MI)", "Jefferson" = "Jefferson (AR)", "Mississippi" = "Mississippi (AR)", "Kenedy" = "Kenedy (TX)", "Bernalillo" = "Bernalillo (NM)", "Jackson" = "Jackson (MO)", "Dougherty" = "Dougherty (GA)", "Scott" = "Scott (MO)", "Dallas" = "Dallas (AL)", "Valencia" = "Valencia (NM)", "Taylor" = "Taylor (FL)", "Dillon" = "Dillon (SC)", "Marlboro" = "Marlboro (SC)"))
+
+
+```
+
+## Analysis 2.12: Insufficient Sleep
+
+```{r}
+#histogram of insufficient sleep variable 
+p_sleep <- dat %>% ggplot(aes(x = `%.Insufficient.Sleep`)) +
+              geom_histogram(binwidth = 1, color = "black", fill = "gray") + 
+              theme_bw()+ 
+              ggtitle("Distribution of Insufficient Sleep % in the U.S.") +
+              theme(plot.title = element_text(hjust = 0.5)) +
+              xlab("Insufficient Sleep %") 
+
+#code to add line where the mean value is located 
+p_sleep + geom_vline(aes(xintercept = mean(`%.Insufficient.Sleep`, na.rm = TRUE)), col='dark red',size=1) 
+
+#code for distribution statistics 
+#mean(dat$`%.Insufficient.Sleep`, na.rm = TRUE)
+#sd(dat$`%.Insufficient.Sleep`, na.rm = TRUE)
+
+#selecting the top 25 counties with the highest values of insufficient sleep 
+p22 <- dat %>% select(county, state, `%.Insufficient.Sleep`) %>% arrange(desc(`%.Insufficient.Sleep`))%>%
+              filter(`%.Insufficient.Sleep` > 45.7)
+
+#line plot for insufficient sleep in the top 25 counties 
+p23 <- p22 %>% ggplot(aes(x = reorder(county, `%.Insufficient.Sleep`), y = `%.Insufficient.Sleep`, group = 1)) +
+            geom_point() +
+            geom_line() + 
+            theme_bw() + 
+            ggtitle("Top 25 Counties With the Highest Insufficient Sleep % in the United States") +
+            theme(plot.title = element_text(hjust = 0.5)) + 
+            theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+            xlab("U.S County") + ylab("Insufficient Sleep %") 
+
+#adding state abbreviations to county line plot
+p23 + scale_x_discrete("U.S. County", labels = c("McCreary" = "McCreary (KY)", "Mingo" = "Mingo (WV)", "Greene" = "Greene (AL)", "Boone" = "Boone (WV)", "Pike" = "Pike (KY)", "Hardeman" = "Hardeman (TN)", "McDowell" = "McDowell (WV)", "Clay" = "Clay (KY)", "Letcher" = "Letcher (KY)", "Harlan" = "Harlan (KY)", "Wayne" = "Wayne (WV)", "Clay" = "Clay (GA) and (KY)", "Lowndes" = "Lowndes (AL)", "Logan" = "Logan (WV)", "Lauderdale" = "Lauderdale (TN)", "Summers" = "Summers (WV)", "Jefferson" = "Jefferson (MS)", "Haywood" = "Haywood (TN)", "Martin" = "Martin (KY)", "Hancock" = "Hancock (GA)", "Shelby" = "Shelby (TN)", "Lake" = "Lake (TN)", "Macon" = "Macon (GA)", "Boyd" = "Boyd (KY)", "Breathitt" = "Breathitt (KY)"))
+```
+
+## Analysis 2.13: Average Daily PM 2.5 
+
+```{r}
+#histogram of average daily PM 2.5 values 
+p_pm <- dat %>% ggplot(aes(x = Average.Daily.PM2.5)) +
+              geom_histogram(binwidth = 1, color = "black", fill = "gray") + 
+              theme_bw()+ 
+              ggtitle("Distribution of Average Daily PM 2.5 in the U.S.") +
+              theme(plot.title = element_text(hjust = 0.5)) +
+              xlab("Average Daily 2.5") 
+
+#code to add line where the median value is located 
+p_pm + geom_vline(aes(xintercept = median(Average.Daily.PM2.5, na.rm = TRUE)), col='dark red',size=1) 
+
+#code for distribution statistics 
+#median(dat$Average.Daily.PM2.5, na.rm = TRUE)
+#IQR(dat$Average.Daily.PM2.5, na.rm = TRUE)
+
+#selecting the top 25 counties with the highest pm 2.5 values 
+p24 <- dat %>% select(county, state, Average.Daily.PM2.5) %>% arrange(desc(Average.Daily.PM2.5))%>%
+              filter(Average.Daily.PM2.5 > 11.1)
+
+#code for the average daily pm 2.5 values in ascending order with top 25 counties 
+p25 <- p24 %>% ggplot(aes(x = reorder(county, Average.Daily.PM2.5), y = Average.Daily.PM2.5, group = 1)) +
+            geom_point() +
+            geom_line() + 
+            theme_bw() + 
+            ggtitle("Top 25 Counties With the Highest Average Daily PM 2.5") +
+            theme(plot.title = element_text(hjust = 0.5)) + 
+            theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+            xlab("U.S County") + ylab("Average Daily PM 2.5 micrograms per cubic meter") 
+
+#adding state abbreviations to county line plot
+p25 + scale_x_discrete("U.S. County", labels = c("Kern" = "Kern (CA)", "Kings" = "Kings (CA)", "San Bernardino" = "San Bernardino (CA)", "Tulare" = "Tulare (CA)", "Fresno" = "Fresno (CA)", "Riverside" = "Riverside (CA)", "San Joaquin" = "San Joaquin (CA)", "Plumas" = "Plumas (CA)", "Allegheny" = "Allegheny (PA)", "Stanislaus" = "Stanislaus (CA)", "Imperial" = "Imperial (CA)", "Pinal" = "Pinal (AZ)", "Jefferson" = "Jefferson (OH)", "Lebanon" = "Lebanon (PA)", "Madera" = "Madera (CA)", "DeKalb" = "DeKalb (GA)", "Los Angeles" = "Los Angeles (CA)", "Merced" = "Merced (CA)", "Lemhi" = "Lemhi (ID)", "Butler" = "Butler (OH)", "Shelby" = "Shelby (AL)", "Lancaster" = "Lancaster (PA)", "Wayne" = "Wayne (MI)", "Berks" = "Berks (PA)", "Montgomery" = "Montgomery (PA)"))
+
+
+```
+
+## Analysis 2.14: Median Household Income
+
+```{r}
+#histogram of median household income
+p_income <- dat %>% ggplot(aes(x = Median.Household.Income)) +
+              geom_histogram(binwidth = 1000, color = "black", fill = "gray") + 
+              theme_bw()+ 
+              ggtitle("Distribution of Median Household Income in the United States") +
+              theme(plot.title = element_text(hjust = 0.5)) +
+              xlab("Median Household Income") 
+
+#addition a line where the median value is located 
+p_income + geom_vline(aes(xintercept = median(Median.Household.Income, na.rm = TRUE)), col='dark red',size=1) 
+
+#code for distribution statistics 
+#median(dat$Median.Household.Income, na.rm = TRUE)
+#IQR(dat$Median.Household.Income, na.rm = TRUE)
+
+
+#code to determine the top 25 counties with the lowest median household income 
+p26 <- dat %>% select(county, state, Median.Household.Income) %>% arrange(Median.Household.Income)%>%
+              filter(Median.Household.Income < 31221)
+
+#line plot in decsending order of median household income with the top 25 counties
+p27 <- p26 %>% ggplot(aes(x = reorder(county, -Median.Household.Income), y = Median.Household.Income, group = 1)) +
+            geom_point() +
+            geom_line() + 
+            theme_bw() + 
+            ggtitle("Top 25 Counties With the Lowest Median Household Income") +
+            theme(plot.title = element_text(hjust = 0.5)) + 
+            theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+            xlab("U.S County") + ylab("Median Household Income") 
+
+#adding state abbreviations to county line plot
+p27 + scale_x_discrete("U.S. County", labels = c("Clay" = "Clay (GA) & (KY)", "Holmes" = "Holmes (MS)", "Buffalo" = "Buffalo (SD)", "Taylor" = "Taylor (GA)", "Humphreys" = "Humphreys (MS)", "Greene" = "Greene (AL)", "Owsley" = "Owsley (KY)", "McDowell" = "McDowell (WV)", "Sumter" = "Sumter (AL)", "Quitman" = "Quitman (MS)", "Perry" = "Perry (AL)", "Leflore" = "Leflore (MS)", "Harlan" = "Harlan (KY)", "Clay" = "Clay (KY) & (GA)", "Coahoma" = "Coahoma (MS)", "Bolivar" = "Bolivar (MS)", "Lee" = "Lee (AR)", "Jefferson" = "Jefferson (MS)", "Lee" = "Lee (KY)", "Bell" = "Bell (KY)", "Issaquena" = "Issaquena (MS)", "Wilcox" = "Wilcox (MS)", "Washington" = "Washington (MS)", "Sharkey" = "Sharkey (MS)", "Johnson" = "Johnson (KY)"))
+
+```
+
+Outcome:
+Our two primary outcomes were life expectancy and drug overdose mortality rate per 100,000 population. We created visualizations of the distribution of each outcome across the United States, by state, and then we determined the top 25 counties with the lowest life expectancy and the top 25 counties with the highest drug overdose mortality rate. We prioritized the histogram and line plots of the 25 counties for each predictor because our overall predictions were using county-level data. Depending on the distribution of the histogram of the variable of interest, the mean and the standard deviation were calculated, or the median and the interquartile range were calculated. We chose these metrics as these are the standard ways to summarize the distribution of variable. As we had county level data, we wanted to ensure that our analyses had a focus at the country level. there were no major changes to our initial ideas. We also wanted to show the relationship between our two main outcome variables, and that is why the scatter plot with the trend line was generated. 
+
+# Analysis 3: Prediction models
+
+## Analysis 3.1: linear regression
+
+## The goal of this section was to identify the machine learning model that best predicts the outcomes of interest 
+
+The built environment and place-based policies play important roles in life expectancy. They are also important factors in many of the epidemics facing America, including drug-related overdose mortality. It would be helpful to know what factors related to county-level characteristics help to predict differences in life expectancies and drug-related overdose mortality. 
+
+Approach: To run a simple linear regression model to understand what covariates might be signficant and then to use correlation plots to pick up on potential collinearities and identify modifiable predictors that are still highly correlated with the outcomes of interest to include in the machine learning prediction models. 
+
+Inspiration: Class sessions on logistic models, Naive Bayes, and Decision trees informed the prediction modelling approach. The outcomes were dichotomized as being below or above average life expectancy and drug overdose mortality respectively. 
+```{r}
+
+# prediction model
+
+# We will be using data from the county health rankings to explore predictors for life expectancy using the following variables:
+
+# Fair or Poor Health
+# Average number of physically unhealthy days
+# Average number of mentally unhealthy days
+# low birthweight
+# smoking status
+# adults with obesity
+# food environment index
+# mental health provider rate 
+# percent completed high school
+# percent completed college
+# percent unemployed
+# violent crime rate 
+# average daily PM 2.5
+# Severe housing problems
+# Median Household Income
+
+# subset data to use for prediction model 
+
+pred_dat <- dat %>% select(Life.Expectancy, `%.Fair.or.Poor.Health`, `Average.Number.of.Physically.Unhealthy.Days`,	`Average.Number.of.Mentally.Unhealthy.Days`,	`%.Low.birthweight`,	`%.Smokers`, `%.Adults.with.Obesity`,	`%.Food.Insecure`,	`%.Physically.Inactive`,	`%.Excessive.Drinking`,	`%.Uninsured`, `Primary.Care.Physicians.Rate`,	Mental.Health.Provider.Rate,	`%.Completed.High.School`, `%.Some.College`,	`%.Unemployed`,	Median.Household.Income, Violent.Crime.Rate, Average.Daily.PM2.5, `%.Severe.Housing.Problems`) %>% arrange(Life.Expectancy) %>% drop_na()
+
+# create correlation plot 
+
+library(GGally)
+library(ggplot2)
+corr <- cor(pred_dat)
+ggcorr(corr, 
+       label = T, 
+       label_size = 2,
+       label_round = 2,
+       hjust = 1,
+       size = 3, 
+       color = "royalblue",
+       layout.exp = 5,
+       low = "red", 
+       mid = "white", 
+       high = "blue",
+       name = "Correlation")
+
+# We will be using data from the county health rankings to explore predictors for the drug-related overdose mortality outcomes using the following variables:
+
+# Frequent.Physical.Distress
+# Frequent.Mental.Distress
+# percentage of Smokers
+# percentage Food Insecure
+# percentage Physically Inactive
+# percentage Excessive Drinking
+# percentage Uninsured
+# Primary.Care.Physicians.Rate
+# Mental.Health.Provider.Rate
+# percentage Completed.High.School
+# percentage completed Some.College
+# percentage Unemployed
+# SES, Median.Household.Income
+# Violent.Crime.Rate
+# percentage Insufficient.Sleep
+# percentage Severe.Housing.Problems
+# Life.Expectancy
+
+# subset prediction data 
+
+pred_dat2 <- dat %>% select(Drug.Overdose.Mortality.Rate,`%.Frequent.Physical.Distress`, `%.Frequent.Mental.Distress`,	`%.Smokers`, `%.Food.Insecure`,	`%.Physically.Inactive`,	`%.Excessive.Drinking`,	`%.Uninsured`, `Primary.Care.Physicians.Rate`,	Mental.Health.Provider.Rate,	`%.Completed.High.School`, `%.Some.College`,	`%.Unemployed`,	Median.Household.Income, Violent.Crime.Rate, `%.Insufficient.Sleep`, `%.Severe.Housing.Problems`, Life.Expectancy) %>% arrange(Drug.Overdose.Mortality.Rate) %>% drop_na()
+
+# correlation plot
+corr2 <- cor(pred_dat2)
+ggcorr(corr2, 
+       label = T, 
+       label_size = 2,
+       label_round = 2,
+       hjust = 1,
+       size = 3, 
+       color = "royalblue",
+       layout.exp = 5,
+       low = "red", 
+       mid = "white", 
+       high = "blue",
+       name = "Correlation")
+
+# fit linear prediction model for life expectancy 
+
+pred_fit <- glm(Life.Expectancy ~ ., data=pred_dat)
+summary(pred_fit)
+
+# fit linear prediction model for overdose mortality 
+
+pred_fit2 <- glm(Drug.Overdose.Mortality.Rate ~ ., data=pred_dat2)
+summary(pred_fit2)
+
+# identify average life expectancy and overdose mortality to dichotomize variables 
+avg.overdose <- mean(pred_dat2$Drug.Overdose.Mortality.Rate)
+avg.overdose
+avg.life <- mean(pred_dat$Life.Expectancy)
+avg.life
+
+# create data sets with dichotomized variables for outcomes of interest
+
+pred_dat <- pred_dat %>% mutate(life_exp = ifelse(Life.Expectancy >= avg.life, 0, 1))
+
+pred_dat2 <- pred_dat2 %>% mutate(overdose = ifelse(Drug.Overdose.Mortality.Rate >= avg.overdose, 1, 0))
+```
+
+## Analysis 3.2: machine learning models
+
+```{r}
+# prediction models 
+
+library(tidyverse)
+library(splitstackshape)
+library(caret)
+library(e1071)
+library(pROC)
+library(dplyr)
+library(ggplot2)
+remotes::update_packages("rlang")
+
+set.seed(1)
+
+# come up with training and test sets 
+x <- stratified(pred_dat, "life_exp", 0.7, keep.rownames = TRUE)
+train_set <- x %>% dplyr::select(-rn)
+train_index <- as.numeric(x$rn)
+test_set <- pred_dat[-train_index,]
+
+dim(train_set)
+dim(test_set)
+
+## Logistic regression model (covariates selected based on relevance to policy/decision-making and correlation to outcomes)
+fit <-  glm(life_exp ~ `%.Food.Insecure` +	`%.Uninsured` + `%.Some.College` +	`%.Unemployed` +	Median.Household.Income + Violent.Crime.Rate + Average.Daily.PM2.5 + `%.Severe.Housing.Problems`, data= train_set, family="binomial")
+
+p_hat <- predict(fit, newdata = test_set, type="response")
+y_hat <- ifelse(p_hat > 0.5, 1, 0)
+
+# confusion matrix
+CF <- confusionMatrix(data = as.factor(y_hat), reference = as.factor(test_set$life_exp), positive = '1')
+CF
+
+## Naive Bayes model
+set.seed(1)
+nb_fit <-  naiveBayes(life_exp ~ `%.Food.Insecure` +	`%.Uninsured` + `%.Some.College` +	`%.Unemployed` +	Median.Household.Income + Violent.Crime.Rate + Average.Daily.PM2.5 + `%.Severe.Housing.Problems`, data = train_set)
+
+p_hat_nb <- predict(nb_fit, test_set, type = "raw")[,2]
+y_hat_nb <- factor(ifelse(p_hat_nb > 0.5, 1, 0))
+
+# confusion matrix
+CFnb <- confusionMatrix(data = as.factor(y_hat_nb), reference = as.factor(test_set$life_exp), positive = '1')
+CFnb
+
+## decision tree model
+library(rpart)
+set.seed(1)
+train_set <- train_set  %>% dplyr::select(., life_exp, `%.Food.Insecure` ,	`%.Uninsured` , `%.Some.College` ,	`%.Unemployed`,	Median.Household.Income , Violent.Crime.Rate , Average.Daily.PM2.5 , `%.Severe.Housing.Problems`)
+tree_fit <- rpart(as.factor(life_exp) ~ ., data = train_set)
+tree_preds <- predict(tree_fit, newdata = test_set, type = "class")
+
+# confusion matrix
+CFtree <- confusionMatrix(data = as.factor(tree_preds), reference = as.factor(test_set$life_exp), positive='1')
+CFtree
+
+# logistic life exp
+
+roc_log <- roc(test_set$life_exp, y_hat)
+
+# nb life exp
+
+roc_nb <- roc(as.factor(test_set$life_exp), p_hat_nb)
+
+# decision tree life exp
+tree_preds <- predict(tree_fit, newdata = test_set, type = "prob")[,2]
+roc_dt <- roc(test_set$life_exp, tree_preds)
+
+
+# ROCs for life expectancy
+
+ggroc(list("Logistic" = roc_log, "Naive Bayes" = roc_nb, "Decision Tree" = roc_dt)) +
+  theme(legend.title = element_blank()) +
+  geom_segment(aes(x = 1, xend = 0, y = 0, yend = 1), color = "black", linetype = "dashed") +
+  xlab("Sensitivity") +
+  ylab("Specificity")+
+  ggtitle("Compare ROCs for Life Expectancy")+
+  theme(plot.title = element_text(hjust = 0.5))
+
+# overdose mortality
+
+# creat training and test sets
+
+x2 <- stratified(pred_dat2, "overdose", 0.7, keep.rownames = TRUE)
+train_set2 <- x2 %>% dplyr::select(-rn)
+train_index2 <- as.numeric(x2$rn)
+test_set2 <- pred_dat2[-train_index2,]
+
+dim(train_set2)
+dim(test_set2)
+
+## Logistic regression model (covariates selected based on relevance to policy/decision-making and correlation to outcomes)
+fit2 <-  glm(overdose ~ `%.Food.Insecure`+	`%.Uninsured`+	`%.Some.College`+	`%.Unemployed`+	Median.Household.Income+ Violent.Crime.Rate+ `%.Insufficient.Sleep`, `%.Severe.Housing.Problems`, data= train_set2, family="binomial")
+
+p_hat2 <- predict(fit2, newdata = test_set2, type="response")
+y_hat2 <- ifelse(p_hat2 > 0.5, 1, 0)
+
+# confusion matrix
+CF2 <- confusionMatrix(data = as.factor(y_hat2), reference = as.factor(test_set2$overdose), positive = '1')
+CF2
+
+## Naive Bayes model
+set.seed(1)
+nb_fit2 <-  naiveBayes(overdose ~ `%.Food.Insecure`+	`%.Uninsured`+	`%.Some.College`+	`%.Unemployed`+	Median.Household.Income+ Violent.Crime.Rate+ `%.Insufficient.Sleep`+ `%.Severe.Housing.Problems`, data = train_set2)
+
+p_hat_nb2 <- predict(nb_fit2, test_set2, type = "raw")[,2]
+y_hat_nb2 <- factor(ifelse(p_hat_nb2 > 0.5, 1, 0))
+
+# confusion matrix
+CFnb2 <- confusionMatrix(data = as.factor(y_hat_nb2), reference = as.factor(test_set2$overdose), positive = '1')
+CFnb2
+
+## decision tree model
+library(rpart)
+set.seed(1)
+train_set2 <- train_set2  %>% dplyr::select(., overdose, `%.Food.Insecure`,	`%.Uninsured`,	`%.Some.College`,	`%.Unemployed`,	Median.Household.Income, Violent.Crime.Rate, `%.Insufficient.Sleep`, `%.Severe.Housing.Problems`)
+tree_fit2 <- rpart(as.factor(overdose) ~ ., data = train_set2)
+tree_preds2 <- predict(tree_fit2, newdata = test_set2, type = "class")
+
+# confusion matrix
+CFtree2 <- confusionMatrix(data = as.factor(tree_preds2), reference = as.factor(test_set2$overdose), positive='1')
+CFtree2
+
+# logistic overdose
+
+roc_log2 <- roc(test_set2$overdose, y_hat2)
+
+# nb overdose
+
+roc_nb2 <- roc(as.factor(test_set2$overdose), p_hat_nb2)
+
+# decision tree overdose
+tree_preds2 <- predict(tree_fit2, newdata = test_set2, type = "prob")[,2]
+roc_dt2 <- roc(test_set2$overdose, tree_preds2)
+
+# ROCs overdose
+
+ggroc(list("Logistic" = roc_log2, "Naive Bayes" = roc_nb2, "Decision Tree" = roc_dt2)) +
+  theme(legend.title = element_blank()) +
+  geom_segment(aes(x = 1, xend = 0, y = 0, yend = 1), color = "black", linetype = "dashed") +
+  xlab("Sensitivity") +
+  ylab("Specificity")+
+  ggtitle("Compare ROCs for Overdose Mortality")+
+  theme(plot.title = element_text(hjust = 0.5))
+
+```
+
+## Analysis 3.3: identifying the best model and most important predictors
+
+```{r}
+# identifying best model 
+
+# areas under the curve 
+auc(roc_log)
+auc(roc_log2)
+auc(roc_nb)
+auc(roc_nb2)
+auc(roc_dt)
+auc(roc_dt2)
+
+# Variable importance from decision tree (life expectancy)
+
+dat_imp <- data.frame(imp = tree_fit$variable.importance)
+dat_imp <- dat_imp %>% 
+  tibble::rownames_to_column() %>% 
+  dplyr::rename("variable" = rowname) %>% 
+  dplyr::arrange(imp) %>%
+  dplyr::mutate(variable = forcats::fct_inorder(variable))
+ggplot2::ggplot(dat_imp) +
+  geom_col(aes(x = variable, y = imp),
+           col = "black", show.legend = FALSE) +
+  coord_flip() +
+  scale_fill_grey() +
+  theme_bw() + 
+  ggtitle("Variable Importance: Life Expectancy (Decision Tree)")
+
+# Variable importance from decision tree (overdose)
+
+dat_imp2 <- data.frame(imp = tree_fit2$variable.importance)
+dat_imp2 <- dat_imp2 %>% 
+  tibble::rownames_to_column() %>% 
+  dplyr::rename("variable" = rowname) %>% 
+  dplyr::arrange(imp) %>%
+  dplyr::mutate(variable = forcats::fct_inorder(variable))
+ggplot2::ggplot(dat_imp2) +
+  geom_col(aes(x = variable, y = imp),
+           col = "black", show.legend = FALSE) +
+  coord_flip() +
+  scale_fill_grey() +
+  theme_bw() + 
+  ggtitle("Variable Importance: Overdose Mortality (Decision Tree)")
+
+```
+
+Table for life Expectancy Prediction models
+
+| Model |Accuracy |Sensitivity | Specificity | AUC |
+| :---                |    :----:                     |  :----:                  | :----:           | :----:         |       ---:            |
+|Logistic| `r round(CF$overall["Accuracy"], 3)`| `r round(CF$byClass["Sensitivity"], 3)`|`r round(CF$byClass["Specificity"], 3)`| `r round(auc(roc_log), 3)`|
+|Naive Bayes| ``r round(CFnb$overall["Accuracy"], 3)`| `r round(CFnb$byClass["Sensitivity"], 3)`|`r round(CFnb$byClass["Specificity"], 3)`| `r round(auc(roc_nb), 3)`|
+|Decision Tree | `r round(CFtree$overall["Accuracy"], 3)`| `r round(CFtree$byClass["Sensitivity"], 3)`|`r round(CFtree$byClass["Specificity"], 3)`| `r round(auc(roc_dt), 3)`|
+
+Table for Overdose Mortality Prediction models
+
+| Model |Accuracy |Sensitivity | Specificity | AUC |
+| :---                |    :----:                     |  :----:                  | :----:           | :----:         |       ---:            |
+|Logistic| `r round(CF2$overall["Accuracy"], 3)`| `r round(CF2$byClass["Sensitivity"], 3)`|`r round(CF2$byClass["Specificity"], 3)`| `r round(auc(roc_log2), 3)`|
+|Naive Bayes| ``r round(CFnb2$overall["Accuracy"], 3)`| `r round(CFnb2$byClass["Sensitivity"], 3)`|`r round(CFnb2$byClass["Specificity"], 3)`| `r round(auc(roc_nb2), 3)`|
+|Decision Tree | `r round(CFtree2$overall["Accuracy"], 3)`| `r round(CFtree2$byClass["Sensitivity"], 3)`|`r round(CFtree2$byClass["Specificity"], 3)`| `r round(auc(roc_dt2), 3)`|
+
+# Analysis 4: Mapping
+
+```{r, warning=FALSE}
+# Loading necessary libraries
+library(openxlsx)
+library(tidyverse)
+library(biscale)
+library(rgdal)
+library(ggplot2)
+library(sf)
+library(sp)
+library(tibble)
+library(cowplot)
+library(ggsn)
+library(rgeos)
+library(raster)
+library(staplr)
+library(grid)
+
+# Read in county shapefile from US Census TIGER/LINE
+county_shp <- rgdal::readOGR(".", layer = "cb_2018_us_county_20m",
+                            verbose = F)
+
+# Convert county shapefile to sf object
+county_sf <- as(county_shp, "sf")
+
+# Read in state shapefile from US Census TIGER/LINE
+state_shp <- rgdal::readOGR(".", layer = "cb_2018_us_state_20m",
+                            verbose = F)
+
+# Convert state shapefile to sf object
+state_sf <- as(state_shp, "sf")
+
+# Remove Puerto Rico from the state shapefile
+state_sf <- state_sf %>% filter(STATEFP != "72")
+
+# Create a new variable that merges the state and county FIPS codes to a single identifier
+county_sf <- county_sf %>% mutate(fips = paste(STATEFP, COUNTYFP, sep = ""))
+
+# Reduce the size of the county health rankings data to only the relevant columns
+dat_subset <- dplyr::select(dat2, c(fips, Drug.Overdose.Mortality.Rate, Life.Expectancy))
+
+# Join the county health rankings data to the county shapefile
+county_sf <- left_join(county_sf, dat_subset, by = c("fips" = "fips"))
+
+# Remove all US territories and non-relevant FIPS codes from the county shapefile
+county_sf <- county_sf %>% filter(STATEFP != "14" & STATEFP != "03" & STATEFP != "43" & STATEFP != "52" & STATEFP != "78" & STATEFP != "79" & STATEFP != "74" & STATEFP != "72" & STATEFP != "69" & STATEFP != "70" & STATEFP != "95" & STATEFP != "71" & STATEFP != "76" & STATEFP != "68" & STATEFP != "89" & STATEFP != "67" & STATEFP != "86" & STATEFP != "84" & STATEFP != "66" & STATEFP != "64" & STATEFP != "81" & STATEFP != "60" & COUNTYFP != "016")
+
+# Drop counties in the shapefile that have missing values for drug overdose mortality rate
+county_sf_no_od_na <- county_sf %>% filter(is.na(Drug.Overdose.Mortality.Rate) == FALSE)
+```
+
+```{r}
+# Create the 3-quantile cutoffs based on the distributions of overdose mortality rate and life expectancy
+od_le_class <- bi_class(county_sf_no_od_na, x = Drug.Overdose.Mortality.Rate, y = Life.Expectancy, style = "quantile", dim = 3)
+
+# Bivariate map of drug overdose mortality rate and life expectancy excluding Alaska and Hawaii, which will be inset later
+map_od_le <- ggplot() +
+  geom_sf(data = filter(od_le_class, STATEFP != "15" & STATEFP != "02"), mapping = aes(fill = bi_class),
+          color = "white", size = 0.1, show.legend = FALSE) +
+  bi_scale_fill(pal = "DkViolet", dim = 3) +
+  bi_theme() +
+  theme(axis.text.x = element_blank(),
+        axis.text.y = element_blank(), 
+        axis.ticks.x = element_blank(),
+        axis.ticks.y = element_blank(), 
+        axis.title = element_blank(),
+        rect = element_blank(),
+        panel.grid.major = element_blank(), 
+        panel.grid.minor = element_blank(),
+        panel.background = element_rect(fill = "transparent",colour = NA),
+        plot.background = element_rect(fill = "transparent",colour = NA)) + 
+  geom_sf(data = filter(county_sf, STATEFP != "15" & STATEFP != "02"), fill = NA, color = "gray50", size = 0.1, show.legend = FALSE) +
+  theme(axis.text.x = element_blank(),
+        axis.text.y = element_blank(), 
+        axis.ticks.x = element_blank(),
+        axis.ticks.y = element_blank(), 
+        axis.title = element_blank(),
+        panel.grid.major = element_blank(), 
+        panel.grid.minor = element_blank(),
+        panel.background = element_rect(fill = "transparent",colour = NA),
+        plot.background = element_rect(fill = "transparent",colour = NA)) + 
+  geom_sf(data = filter(state_sf, STATEFP != "15" & STATEFP != "02"), fill = NA, color = "black",   size = 0.15, show.legend = FALSE) + 
+  theme(axis.text.x = element_blank(),
+        axis.text.y = element_blank(), 
+        axis.ticks.x = element_blank(),
+        axis.ticks.y = element_blank(), 
+        axis.title = element_blank(),
+        panel.grid.major = element_blank(), 
+        panel.grid.minor = element_blank(),
+        panel.background = element_rect(fill = "transparent",colour = NA),
+        plot.background = element_rect(fill = "transparent",colour = NA))
+
+# Bivariate map of drug overdose mortality rate and life expectancy for Hawaii inset
+map_od_le_hi <- ggplot() +
+  geom_sf(data = filter(od_le_class, STATEFP == "15"), mapping = aes(fill = bi_class),
+          color = "white", size = 0.1, show.legend = FALSE) +
+  bi_scale_fill(pal = "DkViolet", dim = 3) +
+  bi_theme() +
+  theme(axis.text.x = element_blank(),
+        axis.text.y = element_blank(), 
+        axis.ticks.x = element_blank(),
+        axis.ticks.y = element_blank(), 
+        axis.title = element_blank(),
+        rect = element_blank(),
+        panel.grid.major = element_blank(), 
+        panel.grid.minor = element_blank(),
+        panel.background = element_rect(fill = "transparent",colour = NA),
+        plot.background = element_rect(fill = "transparent",colour = NA)) + 
+  geom_sf(data = filter(county_sf, STATEFP == "15"), fill = NA, color = "gray50", size = 0.1, show.legend = FALSE) + 
+  theme(axis.text.x = element_blank(),
+        axis.text.y = element_blank(), 
+        axis.ticks.x = element_blank(),
+        axis.ticks.y = element_blank(), 
+        axis.title = element_blank(),
+        panel.grid.major = element_blank(), 
+        panel.grid.minor = element_blank(),
+        panel.background = element_rect(fill = "transparent",colour = NA),
+        plot.background = element_rect(fill = "transparent",colour = NA)) + 
+  geom_sf(data = filter(state_sf, STATEFP == "15"), fill = NA, color = "black", size = 0.15, show.legend = FALSE) + 
+  theme(axis.text.x = element_blank(),
+        axis.text.y = element_blank(), 
+        axis.ticks.x = element_blank(),
+        axis.ticks.y = element_blank(), 
+        axis.title = element_blank(),
+        panel.grid.major = element_blank(), 
+        panel.grid.minor = element_blank(),
+        panel.background = element_rect(fill = "transparent",colour = NA),
+        plot.background = element_rect(fill = "transparent",colour = NA))
+
+# Bivariate map of drug overdose mortality rate and life expectancy for Alaska inset
+map_od_le_ak <- ggplot() +
+  geom_sf(data = filter(od_le_class, STATEFP == "02"), mapping = aes(fill = bi_class),
+          color = "white", size = 0.1, show.legend = FALSE) +
+  bi_scale_fill(pal = "DkViolet", dim = 3) +
+  bi_theme() +
+  theme(axis.text.x = element_blank(),
+        axis.text.y = element_blank(), 
+        axis.ticks.x = element_blank(),
+        axis.ticks.y = element_blank(), 
+        axis.title = element_blank(),
+        rect = element_blank(),
+        panel.grid.major = element_blank(), 
+        panel.grid.minor = element_blank(),
+        panel.background = element_rect(fill = "transparent",colour = NA),
+        plot.background = element_rect(fill = "transparent",colour = NA)) + 
+  geom_sf(data = filter(state_sf, STATEFP == "02"), fill = NA, color = "black", size = 0.15, show.legend = FALSE) + 
+  theme(axis.text.x = element_blank(),
+        axis.text.y = element_blank(), 
+        axis.ticks.x = element_blank(),
+        axis.ticks.y = element_blank(), 
+        axis.title = element_blank(),
+        panel.grid.major = element_blank(), 
+        panel.grid.minor = element_blank(),
+        panel.background = element_rect(fill = "transparent",colour = NA),
+        plot.background = element_rect(fill = "transparent",colour = NA)) + 
+  geom_sf(data = filter(county_sf, STATEFP == "02"), fill = NA, color = "gray50", size = 0.1, show.legend = FALSE) + 
+  theme(axis.text.x = element_blank(),
+        axis.text.y = element_blank(), 
+        axis.ticks.x = element_blank(),
+        axis.ticks.y = element_blank(), 
+        axis.title = element_blank(),
+        panel.grid.major = element_blank(), 
+        panel.grid.minor = element_blank(),
+        panel.background = element_rect(fill = "transparent",colour = NA),
+        plot.background = element_rect(fill = "transparent",colour = NA))
+
+legend_od_le <- bi_legend(pal = "DkViolet",
+                    dim = 3,
+                    xlab = "Higher OD Rate",
+                    ylab = "Higher LE",
+                    size = 8)
+
+# Text box indicating the value cutoffs for the quantiles for each variable
+annotation <- ggplot() + 
+  annotation_custom(grobTree(textGrob("Quantile Cutoffs\nOD Mortality (deaths/100,000): 3.82, 15.84, 24.92, 126.73\nLE (years): 64.41, 76.19, 78.70, 113.46", x = 0.38,  y = 0.05, hjust = 0, gp = gpar(col = "black", fontsize = 8)))) + 
+  theme(axis.text.x = element_blank(),
+        axis.text.y = element_blank(), 
+        axis.ticks.x = element_blank(),
+        axis.ticks.y = element_blank(), 
+        axis.title = element_blank(),
+        panel.grid.major = element_blank(), 
+        panel.grid.minor = element_blank(),
+        panel.background = element_rect(fill = "transparent",colour = NA),
+        plot.background = element_rect(fill = "transparent",colour = NA))
+
+# Use cowplot to assemble the map components
+od_le_bivariate <- ggdraw() +
+  draw_plot(map_od_le, 0, 0, 1, 1) +
+  draw_plot(legend_od_le, 0.75, 0.03, 0.25, 0.25) +
+  draw_plot(map_od_le_hi, 0.2, 0.01, 0.2, 0.2) + 
+  draw_plot(map_od_le_ak, -0.07, -0.6, 1.6, 1.6) + 
+  draw_plot(annotation)
+
+od_le_bivariate
+
+
+```
+
+The map shows the joint spatial distribution of drug overdose mortality rate and life expectancy by county. Counties in white have missing information for drug overdose mortality rate. Quantile cutoffs are the most appropriate choice for spatial classification of epidemiological rate data fro presentation, especially when variables such as drug overdose mortality rate are skewed (Brewer and Pickle, 2002).
+
+Areas of high life expectancy and high drug overdose mortality rate are concentrated in the northeast corridor and south Florida. Areas of low life expectancy and low overdose mortality rates are concentrated southern Appalachia and the rural West. Areas of high life expectancy and low overdose mortality rates are concentrated in upper Midwest, east Texas, and the west coast, including Hawaii.
+
+Brewer CA, Pickle L. Evaluation of methods for classifying epidemiological data on choropleth maps in series. Ann Assoc Am Geogr. 2002;92(4):662–681.
+
+
+

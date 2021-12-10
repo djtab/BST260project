@@ -1,0 +1,13 @@
+name: shiny
+title: shiny
+username:
+account: veronicawang
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 5295965
+bundleId: 5348339
+url: https://veronicawang.shinyapps.io/shiny/
+when: 1639019929.69763
+lastSyncTime: 1639019929.69763
+asMultiple: FALSE
+asStatic: FALSE

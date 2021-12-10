@@ -1,0 +1,220 @@
+---
+title: "BST 260 Group Project Map Only"
+output: html_document
+---
+
+```{r, warning=FALSE}
+# Loading necessary libraries
+library(openxlsx)
+library(tidyverse)
+library(biscale)
+library(rgdal)
+library(ggplot2)
+library(sf)
+library(sp)
+library(tibble)
+library(cowplot)
+library(ggsn)
+library(rgeos)
+library(raster)
+library(staplr)
+library(grid)
+
+# Read in county shapefile from US Census TIGER/LINE
+county_shp <- rgdal::readOGR(".", layer = "cb_2018_us_county_20m",
+                            verbose = F)
+
+# Convert county shapefile to sf object
+county_sf <- as(county_shp, "sf")
+
+# Read in state shapefile from US Census TIGER/LINE
+state_shp <- rgdal::readOGR(".", layer = "cb_2018_us_state_20m",
+                            verbose = F)
+
+# Convert state shapefile to sf object
+state_sf <- as(state_shp, "sf")
+
+# Remove Puerto Rico from the state shapefile
+state_sf <- state_sf %>% filter(STATEFP != "72")
+
+# Create a new variable that merges the state and county FIPS codes to a single identifier
+county_sf <- county_sf %>% mutate(fips = paste(STATEFP, COUNTYFP, sep = ""))
+
+# Reduce the size of the county health rankings data to only the relevant columns
+dat_subset <- dplyr::select(dat2, c(fips, Drug.Overdose.Mortality.Rate, Life.Expectancy))
+
+# Join the county health rankings data to the county shapefile
+county_sf <- left_join(county_sf, dat_subset, by = c("fips" = "fips"))
+
+# Remove all US territories and non-relevant FIPS codes from the county shapefile
+county_sf <- county_sf %>% filter(STATEFP != "14" & STATEFP != "03" & STATEFP != "43" & STATEFP != "52" & STATEFP != "78" & STATEFP != "79" & STATEFP != "74" & STATEFP != "72" & STATEFP != "69" & STATEFP != "70" & STATEFP != "95" & STATEFP != "71" & STATEFP != "76" & STATEFP != "68" & STATEFP != "89" & STATEFP != "67" & STATEFP != "86" & STATEFP != "84" & STATEFP != "66" & STATEFP != "64" & STATEFP != "81" & STATEFP != "60" & COUNTYFP != "016")
+
+# Drop counties in the shapefile that have missing values for drug overdose mortality rate
+county_sf_no_od_na <- county_sf %>% filter(is.na(Drug.Overdose.Mortality.Rate) == FALSE)
+```
+
+```{r}
+# Create the 3-quantile cutoffs based on the distributions of overdose mortality rate and life expectancy
+od_le_class <- bi_class(county_sf_no_od_na, x = Drug.Overdose.Mortality.Rate, y = Life.Expectancy, style = "quantile", dim = 3)
+
+# Bivariate map of drug overdose mortality rate and life expectancy excluding Alaska and Hawaii, which will be inset later
+map_od_le <- ggplot() +
+  geom_sf(data = filter(od_le_class, STATEFP != "15" & STATEFP != "02"), mapping = aes(fill = bi_class),
+          color = "white", size = 0.1, show.legend = FALSE) +
+  bi_scale_fill(pal = "DkViolet", dim = 3) +
+  bi_theme() +
+  theme(axis.text.x = element_blank(),
+        axis.text.y = element_blank(), 
+        axis.ticks.x = element_blank(),
+        axis.ticks.y = element_blank(), 
+        axis.title = element_blank(),
+        rect = element_blank(),
+        panel.grid.major = element_blank(), 
+        panel.grid.minor = element_blank(),
+        panel.background = element_rect(fill = "transparent",colour = NA),
+        plot.background = element_rect(fill = "transparent",colour = NA)) + 
+  geom_sf(data = filter(county_sf, STATEFP != "15" & STATEFP != "02"), fill = NA, color = "gray50", size = 0.1, show.legend = FALSE) +
+  theme(axis.text.x = element_blank(),
+        axis.text.y = element_blank(), 
+        axis.ticks.x = element_blank(),
+        axis.ticks.y = element_blank(), 
+        axis.title = element_blank(),
+        panel.grid.major = element_blank(), 
+        panel.grid.minor = element_blank(),
+        panel.background = element_rect(fill = "transparent",colour = NA),
+        plot.background = element_rect(fill = "transparent",colour = NA)) + 
+  geom_sf(data = filter(state_sf, STATEFP != "15" & STATEFP != "02"), fill = NA, color = "black",   size = 0.15, show.legend = FALSE) + 
+  theme(axis.text.x = element_blank(),
+        axis.text.y = element_blank(), 
+        axis.ticks.x = element_blank(),
+        axis.ticks.y = element_blank(), 
+        axis.title = element_blank(),
+        panel.grid.major = element_blank(), 
+        panel.grid.minor = element_blank(),
+        panel.background = element_rect(fill = "transparent",colour = NA),
+        plot.background = element_rect(fill = "transparent",colour = NA))
+
+# Bivariate map of drug overdose mortality rate and life expectancy for Hawaii inset
+map_od_le_hi <- ggplot() +
+  geom_sf(data = filter(od_le_class, STATEFP == "15"), mapping = aes(fill = bi_class),
+          color = "white", size = 0.1, show.legend = FALSE) +
+  bi_scale_fill(pal = "DkViolet", dim = 3) +
+  bi_theme() +
+  theme(axis.text.x = element_blank(),
+        axis.text.y = element_blank(), 
+        axis.ticks.x = element_blank(),
+        axis.ticks.y = element_blank(), 
+        axis.title = element_blank(),
+        rect = element_blank(),
+        panel.grid.major = element_blank(), 
+        panel.grid.minor = element_blank(),
+        panel.background = element_rect(fill = "transparent",colour = NA),
+        plot.background = element_rect(fill = "transparent",colour = NA)) + 
+  geom_sf(data = filter(county_sf, STATEFP == "15"), fill = NA, color = "gray50", size = 0.1, show.legend = FALSE) + 
+  theme(axis.text.x = element_blank(),
+        axis.text.y = element_blank(), 
+        axis.ticks.x = element_blank(),
+        axis.ticks.y = element_blank(), 
+        axis.title = element_blank(),
+        panel.grid.major = element_blank(), 
+        panel.grid.minor = element_blank(),
+        panel.background = element_rect(fill = "transparent",colour = NA),
+        plot.background = element_rect(fill = "transparent",colour = NA)) + 
+  geom_sf(data = filter(state_sf, STATEFP == "15"), fill = NA, color = "black", size = 0.15, show.legend = FALSE) + 
+  theme(axis.text.x = element_blank(),
+        axis.text.y = element_blank(), 
+        axis.ticks.x = element_blank(),
+        axis.ticks.y = element_blank(), 
+        axis.title = element_blank(),
+        panel.grid.major = element_blank(), 
+        panel.grid.minor = element_blank(),
+        panel.background = element_rect(fill = "transparent",colour = NA),
+        plot.background = element_rect(fill = "transparent",colour = NA))
+
+# Bivariate map of drug overdose mortality rate and life expectancy for Alaska inset
+map_od_le_ak <- ggplot() +
+  geom_sf(data = filter(od_le_class, STATEFP == "02"), mapping = aes(fill = bi_class),
+          color = "white", size = 0.1, show.legend = FALSE) +
+  bi_scale_fill(pal = "DkViolet", dim = 3) +
+  bi_theme() +
+  theme(axis.text.x = element_blank(),
+        axis.text.y = element_blank(), 
+        axis.ticks.x = element_blank(),
+        axis.ticks.y = element_blank(), 
+        axis.title = element_blank(),
+        rect = element_blank(),
+        panel.grid.major = element_blank(), 
+        panel.grid.minor = element_blank(),
+        panel.background = element_rect(fill = "transparent",colour = NA),
+        plot.background = element_rect(fill = "transparent",colour = NA)) + 
+  geom_sf(data = filter(state_sf, STATEFP == "02"), fill = NA, color = "black", size = 0.15, show.legend = FALSE) + 
+  theme(axis.text.x = element_blank(),
+        axis.text.y = element_blank(), 
+        axis.ticks.x = element_blank(),
+        axis.ticks.y = element_blank(), 
+        axis.title = element_blank(),
+        panel.grid.major = element_blank(), 
+        panel.grid.minor = element_blank(),
+        panel.background = element_rect(fill = "transparent",colour = NA),
+        plot.background = element_rect(fill = "transparent",colour = NA)) + 
+  geom_sf(data = filter(county_sf, STATEFP == "02"), fill = NA, color = "gray50", size = 0.1, show.legend = FALSE) + 
+  theme(axis.text.x = element_blank(),
+        axis.text.y = element_blank(), 
+        axis.ticks.x = element_blank(),
+        axis.ticks.y = element_blank(), 
+        axis.title = element_blank(),
+        panel.grid.major = element_blank(), 
+        panel.grid.minor = element_blank(),
+        panel.background = element_rect(fill = "transparent",colour = NA),
+        plot.background = element_rect(fill = "transparent",colour = NA))
+
+legend_od_le <- bi_legend(pal = "DkViolet",
+                    dim = 3,
+                    xlab = "Higher OD Rate",
+                    ylab = "Higher LE",
+                    size = 8)
+
+# Text box indicating the value cutoffs for the quantiles for each variable
+annotation <- ggplot() + 
+  annotation_custom(grobTree(textGrob("Quantile Cutoffs\nOD Mortality (deaths/100,000): 3.82, 15.84, 24.92, 126.73\nLE (years): 64.41, 76.19, 78.70, 113.46", x = 0.38,  y = 0.05, hjust = 0, gp = gpar(col = "black", fontsize = 8)))) + 
+  theme(axis.text.x = element_blank(),
+        axis.text.y = element_blank(), 
+        axis.ticks.x = element_blank(),
+        axis.ticks.y = element_blank(), 
+        axis.title = element_blank(),
+        panel.grid.major = element_blank(), 
+        panel.grid.minor = element_blank(),
+        panel.background = element_rect(fill = "transparent",colour = NA),
+        plot.background = element_rect(fill = "transparent",colour = NA))
+
+# Use cowplot to assemble the map components
+od_le_bivariate <- ggdraw() +
+  draw_plot(map_od_le, 0, 0, 1, 1) +
+  draw_plot(legend_od_le, 0.75, 0.03, 0.25, 0.25) +
+  draw_plot(map_od_le_hi, 0.2, 0.01, 0.2, 0.2) + 
+  draw_plot(map_od_le_ak, -0.07, -0.6, 1.6, 1.6) + 
+  draw_plot(annotation)
+
+#od_le_bivariate
+
+# Save plot as JPG
+#ggsave("od_le_bivariate", device = "jpg", bg = "#ffffff")
+
+# Save plot as RDS
+#saveRDS(od_le_bivariate, file = "od_le_bivariate.rds")
+
+readRDS("od_le_bivariate.rds")
+```
+
+The map shows the joint spatial distribution of drug overdose mortality rate and life expectancy by county. Counties in white have missing information for drug overdose mortality rate. Quantile cutoffs are the most appropriate choice for spatial classification of epidemiological rate data fro presentation, especially when variables such as drug overdose mortality rate are skewed (Brewer and Pickle, 2002).
+
+Areas of high life expectancy and high drug overdose mortality rate are concentrated in the northeast corridor and south Florida. Areas of low life expectancy and low overdose mortality rates are concentrated southern Appalachia and the rural West. Areas of high life expectancy and low overdose mortality rates are concentrated in upper Midwest, east Texas, and the west coast, including Hawaii.
+
+Brewer CA, Pickle L. Evaluation of methods for classifying epidemiological data on choropleth maps in series. Ann Assoc Am Geogr. 2002;92(4):662–681.
+
+
+
+
+
+
+

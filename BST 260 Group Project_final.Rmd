@@ -989,6 +989,8 @@ In the Decision Tree model for overdose-related mortality, the accuracy (which i
 
 Using the decision tree model to understand variable importance in the model, we generated plots of descending importance. Variable importance looks at the relative influence of each of the included variables in the model and selects those that are split on during the tree building process and compares the improvement of squared errors (which is the difference in squared error between the node and its descendant nodes) as a result of the split. 
 
+It is important to note that our models are less accurate for drug-related overdose mortality and the relative importance of the predictors for this outcome is much lower as compared to life expectancy. 
+
 Sources: Lecture notes for machine learning (logistic regression, naive bayes, and decision trees), Stack Exchange, and Variable Importance resources found [here] (https://docs.h2o.ai/h2o/latest-stable/h2o-docs/variable-importance.html). 
 
 # Analysis 4: Mapping

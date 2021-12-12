@@ -12,7 +12,7 @@ For the Shiny app, please access the shiny folder at BST260project/shiny/ where 
 
 Shiny app data and associated documents are found in BST260project/shiny/data/. 
 
-The RMD and HTML files include the "app2.R" code but this file is static and therefore does not have the interactive interface of the Shiny app (the app is accessed in the shiny folder at BST260project/shiny/ and on our webpage at https://sites.google.com/view/countydisparities/interactive).
+The RMD and HTML files include the "app2.R" code but this file is static and therefore does not have the interactive interface of the Shiny app (the interactive app can be accessed via 3 ways: (1) in the shiny folder at BST260project/shiny/, (2) embedded in our webpage at https://sites.google.com/view/countydisparities/interactive, or (3) via the following url linked on the website at https://veronicawang.shinyapps.io/shiny/).
 
 Please access our webpage at https://sites.google.com/view/countydisparities/home 
 
